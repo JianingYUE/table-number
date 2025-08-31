@@ -144,15 +144,31 @@
   function uid(){return 't' + Math.random().toString(36).slice(2,9)}
 
   function seed(){
-    // initial sample tables you can reposition later
+    // Generate tables 1–88, excluding any number containing 4 or 7 in either digit
+    // Each table has LEFT/RIGHT sides → 名称形如 “12左/12右”
     const tables = [];
-    const presets = [
-      {x:60,y:60,name:'T1'}, {x:180,y:60,name:'T2'}, {x:300,y:60,name:'T3'},
-      {x:420,y:60,name:'T4'}, {x:540,y:60,name:'T5'}, {x:660,y:60,name:'T6'},
-      {x:120,y:220,name:'T7'}, {x:260,y:220,name:'T8'}, {x:400,y:220,name:'T9'},
-      {x:540,y:220,name:'T10'}, {x:680,y:220,name:'T11'}, {x:820,y:220,name:'T12'}
-    ];
-    presets.forEach(p=> tables.push({id:uid(), x:p.x, y:p.y, name:p.name, notes:'', items:[], photo:null}));
+
+    // layout grid config
+    const startX = 80;     // left padding
+    const startY = 80;     // top padding
+    const cellW  = 140;    // horizontal spacing between numbers (not L/R)
+    const cellH  = 110;    // vertical spacing
+    const cols   = 8;      // numbers per row (each number occupies one cell; L/R within the cell)
+
+    const isValid = (n)=> !/[47]/.test(String(n).padStart(2,'0')); // no 4 or 7 in tens or ones
+
+    let index = 0; // counts valid numbers
+    for(let n=1; n<=88; n++){
+      if(!isValid(n)) continue;
+      const row = Math.floor(index / cols);
+      const col = index % cols;
+      const baseX = startX + col*cellW;
+      const baseY = startY + row*cellH;
+      // left/right markers inside the same cell (slight offset)
+      tables.push({id:uid(), x:baseX-26, y:baseY, name:`${n}左`, notes:'', items:[], photo:null});
+      tables.push({id:uid(), x:baseX+26, y:baseY, name:`${n}右`, notes:'', items:[], photo:null});
+      index++;
+    }
     return { tables };
   }
 
