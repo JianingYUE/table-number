@@ -124,7 +124,225 @@
   </div>
 
 <script>
-// (JS remains same, except text like alerts/messages converted to English)
+(function(){
+  const $ = sel => document.querySelector(sel);
+  const $$ = sel => Array.from(document.querySelectorAll(sel));
+  const board = $('#board');
+  const editor = $('#editor');
+  const stateKey = 'tableMapState.v1';
+  const bgKey = 'tableMapBG.v1';
+  let data = load() || seed();
+  let selectedId = null;
+  let editMode = false;
+
+  // ----- init -----
+  renderBackground();
+  renderAll();
+  bindToolbar();
+  bindEditor();
+
+  function uid(){return 't' + Math.random().toString(36).slice(2,9)}
+
+  // Generate 1–88, exclude any number containing 4 or 7 in either digit; create Left/Right for each
+  function seed(){
+    const tables = [];
+    const startX = 80;      // left padding
+    const startY = 80;      // top padding
+    const cellW  = 140;     // horizontal spacing between numbers (not L/R)
+    const cellH  = 110;     // vertical spacing
+    const cols   = 8;       // numbers per row
+
+    const isValid = (n)=> !/[47]/.test(String(n).padStart(2,'0'));
+
+    let index = 0;
+    for(let n=1; n<=88; n++){
+      if(!isValid(n)) continue;
+      const row = Math.floor(index / cols);
+      const col = index % cols;
+      const baseX = startX + col*cellW;
+      const baseY = startY + row*cellH;
+      tables.push({id:uid(), x:baseX-26, y:baseY, name:`${n} Left`, notes:'', items:[], photo:null});
+      tables.push({id:uid(), x:baseX+26, y:baseY, name:`${n} Right`, notes:'', items:[], photo:null});
+      index++;
+    }
+    return { tables };
+  }
+
+  function save(){localStorage.setItem(stateKey, JSON.stringify(data))}
+  function load(){try{ return JSON.parse(localStorage.getItem(stateKey)) }catch{return null}}
+
+  function setBackground(dataUrl){
+    if(dataUrl){ localStorage.setItem(bgKey, dataUrl); board.style.backgroundImage = `url(${dataUrl})`; }
+  }
+  function renderBackground(){
+    const bg = localStorage.getItem(bgKey);
+    if(bg){ board.style.backgroundImage = `url(${bg})` }
+  }
+
+  // ----- render markers -----
+  function renderAll(){
+    board.querySelectorAll('.table-marker').forEach(n=>n.remove());
+    data.tables.forEach(t=> board.appendChild(markerNode(t)) );
+  }
+
+  function markerNode(t){
+    const el = document.createElement('div');
+    el.className = 'table-marker';
+    el.style.left = (t.x||0) + 'px';
+    el.style.top  = (t.y||0) + 'px';
+    el.dataset.id = t.id;
+    el.innerHTML = `<span class="table-badge"></span><span class="marker-name"></span><div class="drag-handle"></div>`;
+    el.querySelector('.table-badge').textContent = t.name || 'T?';
+    el.querySelector('.marker-name').textContent = (t.items?.[0] || t.notes || '').slice(0,22);
+
+    el.addEventListener('click', (e)=>{
+      if(editMode) return; // avoid click while dragging
+      select(t.id);
+      openEditor(t.id);
+    });
+    el.addEventListener('dblclick', ()=> openEditor(t.id));
+
+    // drag position in edit mode
+    let drag = {active:false, dx:0, dy:0};
+    el.addEventListener('pointerdown', (e)=>{
+      if(!editMode) return; drag.active=true; el.classList.add('dragging');
+      drag.dx = e.clientX - el.offsetLeft; drag.dy = e.clientY - el.offsetTop; el.setPointerCapture(e.pointerId);
+    });
+    el.addEventListener('pointermove', (e)=>{
+      if(!drag.active) return; const nx = e.clientX - drag.dx; const ny = e.clientY - drag.dy; el.style.left = nx+ 'px'; el.style.top = ny + 'px';
+    });
+    el.addEventListener('pointerup', (e)=>{
+      if(!drag.active) return; drag.active=false; el.classList.remove('dragging');
+      const tObj = data.tables.find(x=>x.id===t.id); tObj.x = el.offsetLeft; tObj.y = el.offsetTop; save();
+    });
+
+    return el;
+  }
+
+  function select(id){
+    selectedId = id; $$('.table-marker').forEach(n=>n.classList.toggle('selected', n.dataset.id===id));
+  }
+
+  // ----- editor -----
+  function openEditor(id){
+    select(id);
+    const t = data.tables.find(x=>x.id===id);
+    $('#f-name').value = t.name || '';
+    $('#f-notes').value = t.notes || '';
+    renderItems(t.items);
+    renderPhoto(t.photo);
+  }
+  function renderItems(items){
+    const box = $('#f-items'); box.innerHTML='';
+    if(!items || items.length===0){ box.textContent='None'; box.classList.add('muted'); return }
+    box.classList.remove('muted');
+    items.forEach((txt,i)=>{
+      const chip = document.createElement('div'); chip.className='chip'; chip.innerHTML = `<span>${escapeHTML(txt)}</span><span class="x" title="Remove">×</span>`;
+      chip.querySelector('.x').onclick = ()=>{ const t = current(); t.items.splice(i,1); renderItems(t.items); save(); }
+      box.appendChild(chip);
+    });
+  }
+  function renderPhoto(photo){
+    const box = $('#photoBox'); box.innerHTML='';
+    if(photo){ const img = new Image(); img.src = photo; box.appendChild(img); }
+    else { box.innerHTML = '<span class="muted">No Photo</span>'; }
+  }
+  function current(){ return data.tables.find(x=>x.id===selectedId) }
+
+  function bindEditor(){
+    $('#f-itemInput').addEventListener('keydown', (e)=>{
+      if(e.key==='Enter' && e.target.value.trim()){
+        const t = current(); if(!t) return; t.items = t.items || []; t.items.push(e.target.value.trim()); e.target.value=''; renderItems(t.items); save();
+      }
+    });
+    $('#f-photo').addEventListener('change', (e)=>{
+      const file = e.target.files?.[0]; if(!file) return; const reader = new FileReader(); reader.onload = ()=>{ const t = current(); if(!t) return; t.photo = reader.result; renderPhoto(t.photo); save(); };
+      reader.readAsDataURL(file);
+    });
+    $('#saveBtn').onclick = ()=>{
+      const t = current(); if(!t) return; t.name = $('#f-name').value.trim()||t.name; t.notes = $('#f-notes').value.trim();
+      const node = board.querySelector(`.table-marker[data-id="${t.id}"]`);
+      node?.querySelector('.table-badge')?.replaceChildren(document.createTextNode(t.name||'T?'));
+      node?.querySelector('.marker-name')?.replaceChildren(document.createTextNode((t.items?.[0]||t.notes||'').slice(0,22)));
+      save();
+      flash(node);
+    };
+    $('#deleteBtn').onclick = ()=>{
+      const t = current(); if(!t) return; if(!confirm(`Delete ${t.name || 'this table'}?`)) return;
+      data.tables = data.tables.filter(x=>x.id!==t.id); save(); renderAll(); selectedId=null;
+    };
+    $('#closeBtn').onclick = ()=>{ selectedId=null; $$('.table-marker').forEach(n=>n.classList.remove('selected')) };
+  }
+
+  function flash(node){ if(!node) return; node.classList.add('pulse'); setTimeout(()=> node.classList.remove('pulse'), 600) }
+
+  // ----- toolbar -----
+  function bindToolbar(){
+    $('#addTableBtn').onclick = ()=>{
+      const id = uid(); const count = data.tables.length/2 + 1; // suggest next number (approx)
+      const t = {id, name:`${count} Left`, x:Math.round(board.clientWidth/2-40+Math.random()*60), y:80+Math.round(Math.random()*40), notes:'', items:[], photo:null};
+      data.tables.push(t); save(); renderAll(); select(id); openEditor(id);
+    };
+    $('#toggleEditBtn').onclick = ()=>{
+      editMode = !editMode; $('#toggleEditBtn').textContent = `Layout Mode: ${editMode?'ON':'OFF'}`; $('#toggleEditBtn').classList.toggle('warn', !editMode);
+      board.classList.toggle('editing', editMode);
+    };
+    $('#exportBtn').onclick = ()=>{
+      const payload = JSON.stringify(data, null, 2);
+      const blob = new Blob([payload], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = Object.assign(document.createElement('a'), {href:url, download:'map-data.json'}); a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+    };
+    $('#importFile').addEventListener('change', (e)=>{
+      const f = e.target.files?.[0]; if(!f) return; const r = new FileReader(); r.onload = ()=>{ try{ const parsed = JSON.parse(r.result); if(!parsed || !Array.isArray(parsed.tables)) throw new Error('Invalid schema'); data = parsed; save(); renderAll(); alert('Import succeeded'); }catch{ alert('Import failed: invalid JSON') } };
+      r.readAsText(f);
+    });
+    $('#resetBtn').onclick = ()=>{ if(confirm('Reset all tables? This will remove current map data.')){ data = seed(); save(); renderAll(); }};
+    $('#bgFile').addEventListener('change', (e)=>{
+      const f = e.target.files?.[0]; if(!f) return; const r = new FileReader(); r.onload = ()=>{ setBackground(r.result) }; r.readAsDataURL(f);
+    });
+
+    const search = $('#search'); const list = $('#resultList');
+    function normalizeQuery(q){
+      q = (q||'').trim().toLowerCase();
+      // support 12l / 12r quick patterns
+      const m = q.match(/^(\d{1,2})([lr])$/);
+      if(m){ const num = parseInt(m[1],10); const side = m[2]==='l'?' left':' right'; return `${num}${side}`; }
+      return q.replace(/\bleft\b/g,' left').replace(/\bright\b/g,' right');
+    }
+    function runSearch(q){
+      q = normalizeQuery(q);
+      list.innerHTML=''; $$('.table-marker').forEach(n=> n.classList.remove('pulse'));
+      if(!q){ return }
+      const matches = data.tables.filter(t=>
+        (t.name||'').toLowerCase().includes(q) ||
+        (t.notes||'').toLowerCase().includes(q) ||
+        (t.items||[]).some(it=> it.toLowerCase().includes(q))
+      );
+      matches.forEach(t=>{
+        const row = document.createElement('div'); row.className='match';
+        const desc = escapeHTML((t.items||[]).join(', ')||t.notes||'');
+        row.innerHTML = `<div><b>${escapeHTML(t.name)}</b><div class="muted" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${desc}</div></div><button class="btn">Focus</button>`;
+        row.querySelector('button').onclick = ()=> focusTable(t.id);
+        list.appendChild(row);
+      });
+      matches.forEach(t=> flash(board.querySelector(`.table-marker[data-id="${t.id}"]`)) );
+      // if exactly one match, auto focus
+      if(matches.length===1) focusTable(matches[0].id);
+    }
+    search.addEventListener('keydown', (e)=>{ if(e.key==='Enter') runSearch(search.value) });
+    $('#clearSearch').onclick = ()=>{ search.value=''; list.innerHTML=''; $$('.table-marker').forEach(n=> n.classList.remove('pulse')) };
+
+    function focusTable(id){
+      const node = board.querySelector(`.table-marker[data-id="${id}"]`); if(!node) return;
+      const rect = node.getBoundingClientRect(); const parent = board.getBoundingClientRect();
+      board.scrollTo({ left: node.offsetLeft - parent.width/2 + rect.width/2, top: node.offsetTop - parent.height/2 + rect.height/2, behavior:'smooth' });
+      flash(node); select(id); openEditor(id);
+    }
+  }
+
+  function escapeHTML(s){return (s??'').replace(/[&<>"']/g, m=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]))}
+})();
 </script>
 </body>
 </html>
