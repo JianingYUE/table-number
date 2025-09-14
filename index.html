@@ -1,633 +1,418 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-  <title>Interactive 2D Table Map – Inventory Mode</title>
-  <style>
-    :root{
-      --bg:#0b0d10; --card:#12161b; --muted:#8892a6; --text:#e6edf3; --accent:#6aa6ff; --good:#38d39f; --warn:#ffb86b; --danger:#ff6b6b;
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{margin:0;background:linear-gradient(180deg,#0a0c10,#0d1117);color:var(--text);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji"}
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Inventory – Bar View</title>
+<style>
+:root{
+  --bg:#0b0d10; --card:#12161b; --muted:#8892a6; --text:#e6edf3; --accent:#6aa6ff;
+  --bar-bg:#1a2230; --bar-rem:#38d39f; --bar-used:#2a3344;
+}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(180deg,#0a0c10,#0d1117);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+header{position:sticky;top:0;z-index:5;background:rgba(13,17,23,.92);backdrop-filter:saturate(1.2) blur(8px);border-bottom:1px solid #202632}
+.toolbar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;padding:.6rem .9rem}
+.btn, input[type="file"]::file-selector-button, .chip{border:1px solid #303845;background:#12161b;color:var(--text);padding:.48rem .7rem;border-radius:.8rem;cursor:pointer}
+.btn:hover{border-color:#3a4556}
+.btn.primary{background:linear-gradient(180deg,#2a5fff,#1b50e6);border-color:#2c57d0}
+.btn.ghost{background:transparent}
+.btn.warn{background:#312312;border-color:#5a3b13;color:#ffcc88}
+input[type="text"],input[type="number"],textarea{background:#0f1318;border:1px solid #2a3240;color:var(--text);border-radius:.6rem;padding:.55rem .6rem;outline:none}
+textarea{min-height:84px;resize:vertical}
 
-    header{position:sticky;top:0;z-index:6;background:rgba(13,17,23,.92);backdrop-filter:saturate(1.2) blur(8px);border-bottom:1px solid #202632;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;padding:.6rem .9rem}
-    .toolbar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;width:100%}
-    .toolbar input[type="text"]{min-width:230px}
-    .btn, input[type="file"]::file-selector-button, .chip{border:1px solid #303845;background:#12161b;color:var(--text);padding:.48rem .7rem;border-radius:.8rem;cursor:pointer}
-    .btn:hover{border-color:#3a4556}
-    .btn.primary{background:linear-gradient(180deg,#2a5fff,#1b50e6);border-color:#2c57d0}
-    .btn.ghost{background:transparent}
-    .btn.warn{background:#312312;border-color:#5a3b13;color:#ffcc88}
-    input[type="text"], input[type="number"], textarea, select{background:#0f1318;border:1px solid #2a3240;color:var(--text);border-radius:.6rem;padding:.55rem .6rem;outline:none}
-    textarea{min-height:84px;resize:vertical}
+.wrap{display:grid;grid-template-columns:1.2fr .9fr;gap:0;min-height:calc(100vh - 56px)}
+.main{padding:10px}
+.panel{border-left:1px solid #202632;background:#0d1117;position:relative}
 
-    .wrap{display:grid;grid-template-columns: 1fr 380px;gap:0;border-top:1px solid #161b22;min-height:calc(100vh - 56px)}
-    .panel{border-left:1px solid #202632;background:#0d1117;position:relative}
+.card{background:linear-gradient(180deg,#11151b,#0f1319);border:1px solid #1f2631;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+.list{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px 12px}
+.row + .row{border-top:1px solid #1c2430}
+.title{font-weight:700}
+.muted{color:var(--muted)}
+.kbd{font-family:ui-monospace,Menlo,Consolas,monospace;background:#12161b;padding:.1rem .35rem;border-radius:6px;border:1px solid #202632}
 
-    #stage{position:relative;overflow:auto;background:#0b0e13}
-    .board{position:relative;margin:12px;border:1px solid #202632;border-radius:16px;min-height:72vh;background:#0c1016;background-size:contain;background-repeat:no-repeat;background-position:center; overflow:auto}
-    #grid{position:absolute;inset:0;pointer-events:none;background-image: radial-gradient(circle at 1px 1px,#1a2230 1px,transparent 0);background-size:20px 20px;opacity:.35}
-    #layer{position:absolute; inset:0; transform-origin:0 0;}
+.bar{position:relative;height:14px;background:var(--bar-bg);border-radius:999px;overflow:hidden}
+.bar .used{position:absolute;inset:0 0 0 auto;background:var(--bar-used)}
+.bar .rem{position:absolute;inset:0 auto 0 0;background:var(--bar-rem)}
+.badge{display:inline-block;padding:.1rem .45rem;border-radius:999px;background:#152032;border:1px solid #243042;font-weight:700}
 
-    .table-marker{position:absolute;min-width:54px;min-height:54px;display:flex;align-items:center;justify-content:center;padding:6px 10px;border-radius:14px;border:1px solid #2a3240;background:#10151c;box-shadow:0 4px 16px rgba(0,0,0,.35);cursor:pointer;user-select:none;transition:transform .15s ease, box-shadow .15s ease, border-color .2s}
-    .table-marker:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.45)}
-    .table-marker.selected{border-color:var(--accent);box-shadow:0 0 0 2px rgba(106,166,255,.25)}
-    .table-badge{font-weight:700;border-radius:10px;padding:.1rem .45rem;margin-right:.4rem;background:#152032;border:1px solid #243042}
-    .marker-name{font-weight:600;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .pulse{box-shadow:0 0 0 2px rgba(56,211,159,.2),0 0 0 6px rgba(56,211,159,.08)}
-    .table-marker.dragging .drag-handle{display:block}
-    .drag-handle{position:absolute;inset:-6px;border:2px dashed #304055;border-radius:16px;display:none}
+.table-row{display:grid;grid-template-columns: minmax(120px, 220px) 1fr max-content;gap:12px;align-items:center;padding:12px}
+.table-row:hover{background:#0e1319}
+.table-row .meta{display:flex;gap:8px;align-items:center}
+.table-row .sub{color:var(--muted);font-size:12px}
+.table-row .stat{white-space:nowrap}
 
-    .panel h3{margin:16px;font-size:16px}
-    .form{display:flex;flex-direction:column;gap:.6rem;padding:0 16px 16px}
-    .form .row{display:grid;grid-template-columns:1fr;gap:.5rem}
-    .photo{width:100%;aspect-ratio: 4/3; background:#0f1318;border:1px dashed #344055;border-radius:12px;display:grid;place-items:center;overflow:hidden}
-    .photo img{width:100%;height:100%;object-fit:cover}
+.photo{width:100%;aspect-ratio:4/3;background:#0f1318;border:1px dashed #344055;border-radius:12px;display:grid;place-items:center;overflow:hidden}
+.photo img{width:100%;height:100%;object-fit:cover}
 
-    .items{display:flex;flex-wrap:wrap;gap:.4rem}
-    .chip{display:inline-flex;gap:.35rem;align-items:center}
-    .chip .x{font-weight:700;opacity:.7}
-    .muted{color:var(--muted)}
+.panel h3{margin:16px}
+.form{display:flex;flex-direction:column;gap:.6rem;padding:0 16px 16px}
+.chips{display:flex;flex-wrap:wrap;gap:.4rem}
+.chip .x{font-weight:700;opacity:.7}
 
-    .list{max-height:240px;overflow:auto;border-top:1px solid #202632;padding:8px 16px}
-    .list .match{padding:6px 8px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;border:1px solid #243042;margin-bottom:6px}
+.inv{border-top:1px solid #202632;margin-top:6px;padding:8px 16px;max-height:220px;overflow:auto}
+.inv-card{display:flex;gap:.6rem;align-items:center;border:1px solid #243042;border-radius:10px;padding:6px 8px;margin-bottom:8px}
+.inv-thumb{width:56px;height:42px;flex:0 0 56px;background:#0f1318;border:1px solid #2a3240;border-radius:8px;overflow:hidden;display:grid;place-items:center}
+.inv-thumb img{width:100%;height:100%;object-fit:cover}
+.tag{display:inline-block;background:#152032;border:1px solid #243042;padding:.1rem .4rem;border-radius:999px;font-weight:600}
 
-    .foot{position:absolute;bottom:0;left:0;right:0;padding:10px 16px;border-top:1px solid #202632;display:flex;gap:.5rem}
-    .foot .sp{flex:1}
+.foot{position:absolute;left:0;right:0;bottom:0;padding:10px 16px;border-top:1px solid #202632;display:flex;gap:.5rem}
+.foot .sp{flex:1}
 
-    .hint{padding:10px 16px;color:#a6b2c0;border-top:1px solid #202632}
-    .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,monospace;background:#12161b;padding:.1rem .35rem;border-radius:6px;border:1px solid #202632}
-
-    .inv{border-top:1px solid #202632;margin-top:6px;padding:8px 16px;max-height:220px;overflow:auto}
-    .inv-card{display:flex;gap:.6rem;align-items:center;border:1px solid #243042;border-radius:10px;padding:6px 8px;margin-bottom:8px}
-    .inv-thumb{width:56px;height:42px;flex:0 0 56px;background:#0f1318;border:1px solid #2a3240;border-radius:8px;overflow:hidden;display:grid;place-items:center}
-    .inv-thumb img{width:100%;height:100%;object-fit:cover}
-    .tag{display:inline-block;background:#152032;border:1px solid #243042;padding:.1rem .4rem;border-radius:999px;font-weight:600}
-
-    .mobile-toggle{display:none}
-    @media (max-width: 900px){
-      .wrap{grid-template-columns:1fr}
-      #stage{height:calc(100vh - 56px)}
-      .board{min-height:60vh;margin:8px}
-      .panel{position:fixed;left:0;right:0;bottom:0;height:68vh;border-left:none;border-top:1px solid #202632;border-radius:16px 16px 0 0;transform:translateY(100%);transition:transform .25s ease;z-index:7}
-      .panel.open{transform:translateY(0)}
-      .foot{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
-      .toolbar{overflow:auto;white-space:nowrap;width:100%}
-      .toolbar > *{flex:0 0 auto}
-      .toolbar input[type="text"]{min-width:180px}
-      .table-marker{min-width:56px;min-height:56px}
-      .marker-name{max-width:120px}
-      .mobile-toggle{display:block;position:fixed;right:12px;bottom:12px;z-index:8}
-    }
-  </style>
+/* mobile */
+.mobile-toggle{display:none}
+@media (max-width: 900px){
+  .wrap{grid-template-columns:1fr}
+  .panel{position:fixed;left:0;right:0;bottom:0;height:68vh;border-left:none;border-top:1px solid #202632;border-radius:16px 16px 0 0;transform:translateY(100%);transition:transform .25s ease;z-index:6;background:#0d1117}
+  .panel.open{transform:translateY(0)}
+  .mobile-toggle{display:block;position:fixed;right:12px;bottom:12px;z-index:7}
+}
+</style>
 </head>
 <body>
-  <header>
-    <div class="toolbar">
-      <label class="btn ghost">Upload Floorplan<input id="bgFile" type="file" accept="image/*" hidden></label>
-      <button id="addTableBtn" class="btn">Add Table</button>
-      <button id="addPairBtn" class="btn">Add Pair</button>
-      <button id="toggleEditBtn" class="btn warn" title="Drag markers to reposition">Layout Mode: OFF</button>
-      <button id="snapBtn" class="btn ghost" title="Snap / Unsnap to 20px grid">Snap: ON</button>
-      <input id="search" type="text" placeholder="Search item/table/notes…" />
-      <input id="needSpace" type="number" step="1" min="0" style="width:110px" placeholder="Need space" title="Find tables with remaining ≥ this number"/>
-      <button id="runSearch" class="btn ghost">Find</button>
-      <button id="clearSearch" class="btn ghost">Clear</button>
-      <button id="resetBtn" class="btn ghost" title="Reset all data (keep background)">Reset</button>
-      <button id="zoomOutBtn" class="btn ghost">−</button>
-      <button id="zoomInBtn" class="btn ghost">＋</button>
-    </div>
-  </header>
-
-  <div class="wrap">
-    <main id="stage">
-      <div id="board" class="board">
-        <div id="grid"></div>
-        <div id="layer"></div>
-      </div>
-    </main>
-
-    <aside class="panel" id="editor">
-      <h3>Table Info</h3>
-      <div class="form">
-        <div class="row"><label>Table No / Name<input id="f-name" type="text" placeholder="e.g. 12 Left or Private Room A"/></label></div>
-        <div class="row">
-          <div style="display:grid;grid-template-columns:1fr 1fr; gap:.5rem">
-            <label>Total Capacity<input id="f-cap" type="number" min="0" step="1" placeholder="e.g. 100"/></label>
-            <label>Remaining<input id="f-rem" type="number" disabled/></label>
-          </div>
-        </div>
-        <div class="row"><label>Notes<textarea id="f-notes" placeholder="Internal notes, special requirements, etc"></textarea></label></div>
-
-        <div class="row" style="border-top:1px solid #202632;padding-top:8px">
-          <strong>Add Item into this Table</strong>
-          <label>Item Name<input id="i-name" type="text" placeholder="e.g. Birthday cake / Thermos / Camera bag"/></label>
-          <div style="display:grid;grid-template-columns:1fr 1fr; gap:.5rem">
-            <label>Size<input id="i-size" type="number" min="0" step="1" placeholder="e.g. 10"/></label>
-            <label>Note (optional)<input id="i-note" type="text" placeholder="e.g. top left corner"/></label>
-          </div>
-          <div class="photo" id="i-photoBox"><span class="muted">No Photo</span></div>
-          <div style="display:flex;gap:.5rem;align-items:center">
-            <label class="btn ghost" style="width:max-content;">Item Photo<input id="i-photo" type="file" accept="image/*" hidden></label>
-            <button id="i-clear" class="btn ghost">Clear Photo</button>
-            <div class="sp"></div>
-            <button id="i-add" class="btn primary">Save Item</button>
-          </div>
-        </div>
-
-        <div class="row">
-          <strong>Items in this Table</strong>
-          <div id="invList" class="inv muted">No items yet</div>
-        </div>
-
-        <div class="row">
-          <label>Quick Tags (Enter to add)<input id="f-itemInput" type="text" placeholder="e.g. Fragile, VIP"/></label>
-          <div id="f-items" class="items muted">None</div>
-        </div>
-
-        <div class="row">
-          <div class="photo" id="photoBox"><span class="muted">No Table Photo</span></div>
-          <label class="btn ghost" style="width:max-content; margin-top:.4rem">Update Table Photo<input id="f-photo" type="file" accept="image/*" hidden></label>
-        </div>
-      </div>
-
-      <div class="hint">Tip: Use <span class="kbd">Layout Mode</span> to drag markers. Double-click a marker to edit. Item photos & table photos are stored separately to reduce quota risk.</div>
-
-      <div class="foot">
-        <button id="saveBtn" class="btn primary">Save Table</button>
-        <button id="deleteBtn" class="btn" style="background:#25161a;border-color:#4a2a32;color:#ff9aa9">Delete Table</button>
-        <div class="sp"></div>
-        <button id="closeBtn" class="btn ghost">Close</button>
-      </div>
-
-      <div class="list" id="resultList"></div>
-    </aside>
+<header>
+  <div class="toolbar">
+    <button id="addTable" class="btn">Add Table</button>
+    <button id="addPair" class="btn">Add Pair</button>
+    <input id="q" type="text" placeholder="搜索物品/桌名/备注…" />
+    <input id="need" type="number" min="0" step="1" style="width:120px" placeholder="需要空间" />
+    <button id="find" class="btn ghost">Find</button>
+    <button id="clear" class="btn ghost">Clear</button>
+    <div class="sp"></div>
+    <span class="muted">绿色表示剩余空间</span>
   </div>
+</header>
 
-  <button id="togglePanel" class="btn primary mobile-toggle" aria-controls="editor" aria-expanded="false">Edit</button>
+<div class="wrap">
+  <main class="main">
+    <div class="card">
+      <div id="tableList" class="list"></div>
+    </div>
+  </main>
+
+  <aside id="editor" class="panel">
+    <h3>Table</h3>
+    <div class="form">
+      <label>名称<input id="f-name" type="text" placeholder="12 Left / A 区"></label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+        <label>总容量<input id="f-cap" type="number" min="0" step="1" placeholder="100"></label>
+        <label>剩余<input id="f-rem" type="number" disabled></label>
+      </div>
+      <label>备注<textarea id="f-notes" placeholder="例如：上层/有电源/加锁等"></textarea></label>
+
+      <div class="photo" id="t-photoBox"><span class="muted">无桌面照片</span></div>
+      <div style="display:flex;gap:.5rem;align-items:center">
+        <label class="btn ghost">桌面照片<input id="t-photo" type="file" accept="image/*" hidden></label>
+        <button id="t-photo-clear" class="btn ghost">清除</button>
+      </div>
+
+      <label>标签（回车添加）<input id="f-tagInput" type="text" placeholder="Fragile, VIP"></label>
+      <div id="f-tags" class="chips muted">None</div>
+
+      <hr style="border:none;border-top:1px solid #202632">
+      <strong>添加物品</strong>
+      <label>物品名<input id="i-name" type="text" placeholder="相机 / 生日蛋糕 / 保温壶"></label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+        <label>大小<input id="i-size" type="number" min="0" step="1" placeholder="10"></label>
+        <label>备注（可选）<input id="i-note" type="text" placeholder="左上角 / 箱内"></label>
+      </div>
+      <div class="photo" id="i-photoBox"><span class="muted">无物品照片</span></div>
+      <div style="display:flex;gap:.5rem;align-items:center">
+        <label class="btn ghost">物品照片<input id="i-photo" type="file" accept="image/*" hidden></label>
+        <button id="i-photo-clear" class="btn ghost">清除</button>
+        <div class="sp"></div>
+        <button id="i-add" class="btn primary">保存物品</button>
+      </div>
+
+      <strong style="margin-top:6px">物品列表</strong>
+      <div id="invList" class="inv muted">暂无</div>
+    </div>
+
+    <div class="foot">
+      <button id="saveTable" class="btn primary">保存桌子</button>
+      <button id="deleteTable" class="btn" style="background:#25161a;border-color:#4a2a32;color:#ff9aa9">删除桌子</button>
+      <div class="sp"></div>
+      <button id="closePanel" class="btn ghost">关闭</button>
+    </div>
+  </aside>
+</div>
+
+<button id="togglePanel" class="btn primary mobile-toggle" aria-expanded="false">编辑</button>
 
 <script>
 (function(){
-  const $ = sel => document.querySelector(sel);
-  const $$ = sel => Array.from(document.querySelectorAll(sel));
-  const board = $('#board');
-  const layer = $('#layer');
-  const editor = $('#editor');
-  const togglePanelBtn = $('#togglePanel');
-  const stateKey = 'tableMapState.inv.v1';
-  const bgKey    = 'tableMapBG.v1';
+  const $ = s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
+  const list = $('#tableList'), panel = $('#editor'), toggleBtn = $('#togglePanel');
+  const stateKey='bar.inv.v1';
   let data = load() || seed();
-  let selectedId = null;
-  let editMode = false;
-  let snapOn = true;
-  let zoom = 1;
-  const GRID = 20;
+  let selectedId=null;
 
-  const isMobile = () => window.matchMedia('(max-width: 900px)').matches;
+  // init
+  renderList(); bindToolbar(); bindPanel();
 
-  renderBackground();
-  applyZoom();
-  renderAll();
-  bindToolbar();
-  bindEditor();
-
-  function uid(){return 't' + Math.random().toString(36).slice(2,9)}
-  function eid(){return 'e' + Math.random().toString(36).slice(2,9)}
+  // ======= data model =======
+  function uid(){ return 't'+Math.random().toString(36).slice(2,9) }
+  function eid(){ return 'e'+Math.random().toString(36).slice(2,9) }
+  function newTable(name){ return {id:uid(), name, notes:'', tags:[], capacity:100, entries:[], tablePhoto:null}; }
+  function remainingOf(t){ const used=(t.entries||[]).reduce((s,e)=>s+Number(e.size||0),0); return Math.max(0, Number(t.capacity||0)-used); }
 
   function seed(){
-    const tables = [];
-    const startX = 64, startY = 64, cellW = 128, cellH = 104, cols = 8;
-    const isValid = (n)=> !/[47]/.test(String(n).padStart(2,'0'));
-    let index = 0;
-    for(let n=1;n<=88;n++){
-      if(!isValid(n)) continue;
-      const row = Math.floor(index / cols);
-      const col = index % cols;
-      const baseX = startX + col*cellW;
-      const baseY = startY + row*cellH;
-      tables.push(newTable(`${n} Left`,  baseX-26, baseY));
-      tables.push(newTable(`${n} Right`, baseX+26, baseY));
-      index++;
-    }
-    return { tables };
+    // 生成 1–88, 过滤含 4/7 的号，每个号 Left/Right
+    const tables=[]; const isValid=n=>!/[47]/.test(String(n).padStart(2,'0'));
+    for(let n=1;n<=88;n++){ if(!isValid(n)) continue; tables.push(newTable(`${n} Left`)); tables.push(newTable(`${n} Right`)); }
+    return {tables};
   }
 
-  function newTable(name, x=80, y=80){
-    return { id:uid(), x, y, name, notes:'', tags:[], tablePhoto:null, capacity:100, entries:[] };
-  }
-
+  // ======= storage (split photos) =======
   function save(){
     try{
-      const slim = { tables: data.tables.map(t=>{
-        if(t.tablePhoto){ try{ localStorage.setItem(`photo:table:${t.id}`, t.tablePhoto); }catch(e){} }
-        (t.entries||[]).forEach(en=>{
-          if(en.photo){ try{ localStorage.setItem(`photo:entry:${en.id}`, en.photo); }catch(e){} }
-        });
-        const {tablePhoto, entries, ...rest} = t;
-        const slimEntries = (entries||[]).map(en=>{
-          const {photo, ...r} = en; return r;
-        });
-        return {...rest, entries: slimEntries};
+      const slim={tables:data.tables.map(t=>{
+        if(t.tablePhoto){ try{ localStorage.setItem('photo:table:'+t.id, t.tablePhoto);}catch(e){} }
+        (t.entries||[]).forEach(en=>{ if(en.photo){ try{ localStorage.setItem('photo:entry:'+en.id, en.photo);}catch(e){} }});
+        const {tablePhoto, entries, ...rest}=t;
+        const es=(entries||[]).map(en=>{ const {photo,...r}=en; return r; });
+        return {...rest, entries:es};
       })};
       localStorage.setItem(stateKey, JSON.stringify(slim));
       return true;
     }catch(e){
-      console.error('Save failed', e);
-      const msg = /quota|NS_ERROR_DOM_QUOTA_REACHED|NotAllowedError/i.test(String(e))
-        ? 'Save failed: storage blocked/full. Try disabling Private Mode, compressing photos, or clearing old data.'
-        : 'Save failed due to an unexpected error.';
-      alert(msg);
-      return false;
+      alert('保存失败：浏览器存储已满或被阻止。可尝试清除旧照片。'); return false;
     }
   }
   function load(){
     try{
-      const raw = localStorage.getItem(stateKey);
-      if(!raw) return null;
-      const slim = JSON.parse(raw);
-      const tables = (slim.tables||[]).map(t=>{
-        const tablePhoto = localStorage.getItem(`photo:table:${t.id}`) || null;
-        const entries = (t.entries||[]).map(en=>{
-          const photo = localStorage.getItem(`photo:entry:${en.id}`) || null;
-          return {...en, photo};
-        });
+      const raw=localStorage.getItem(stateKey); if(!raw) return null;
+      const slim=JSON.parse(raw);
+      const tables=(slim.tables||[]).map(t=>{
+        const tablePhoto=localStorage.getItem('photo:table:'+t.id)||null;
+        const entries=(t.entries||[]).map(en=>({...en, photo:localStorage.getItem('photo:entry:'+en.id)||null}));
         return {...t, tablePhoto, entries};
       });
       return {tables};
-    }catch(e){ console.error('Load failed', e); return null }
+    }catch{ return null }
   }
 
-  function setBackground(dataUrl){
-    if(dataUrl){ localStorage.setItem(bgKey, dataUrl); board.style.backgroundImage = `url(${dataUrl})`; }
-  }
-  function renderBackground(){
-    const bg = localStorage.getItem(bgKey);
-    if(bg){ board.style.backgroundImage = `url(${bg})` }
-  }
+  // ======= list render (bar view) =======
+  function renderList(items=data.tables){
+    list.innerHTML='';
+    if(!items.length){ list.innerHTML='<div class="row"><span class="muted">暂无桌子</span></div>'; return; }
 
-  function tableById(id){ return data.tables.find(x=>x.id===id) }
-  function remainingOf(t){
-    const cap = Number(t.capacity||0);
-    const used = (t.entries||[]).reduce((s,en)=> s + Number(en.size||0), 0);
-    return Math.max(0, cap - used);
-  }
-  function topSubtitle(t){
-    if(t.entries && t.entries.length){ return `${t.entries[0].name}`.slice(0,22) }
-    if(t.notes) return t.notes.slice(0,22);
-    return `Rem ${remainingOf(t)}/${t.capacity||0}`;
-  }
-  function snap(v){ return Math.round(v / GRID) * GRID; }
-  function escapeHTML(s){return (s??'').replace(/[&<>"']/g, m=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]))}
-  function fmtDate(ts){ const d = ts? new Date(ts) : new Date(); return d.toLocaleString(); }
+    items.forEach(t=>{
+      const rem=remainingOf(t), cap=Number(t.capacity||0), used=Math.max(0, cap-rem);
+      const pct = cap>0 ? (rem/cap)*100 : 0;
 
-  function renderAll(){
-    layer.querySelectorAll('.table-marker').forEach(n=>n.remove());
-    data.tables.forEach(t=> layer.appendChild(markerNode(t)) );
-  }
-
-  function markerNode(t){
-    const el = document.createElement('div');
-    el.className = 'table-marker';
-    el.style.left = (t.x||0) + 'px';
-    el.style.top  = (t.y||0) + 'px';
-    el.dataset.id = t.id;
-    el.innerHTML = `<span class="table-badge"></span><span class="marker-name"></span><div class="drag-handle"></div>`;
-    el.querySelector('.table-badge').textContent = t.name || 'T?';
-    el.querySelector('.marker-name').textContent = topSubtitle(t);
-
-    el.addEventListener('click', ()=>{
-      if(editMode) return;
-      select(t.id);
-      openEditor(t.id);
-      if(isMobile()) openPanel(true);
+      const row = document.createElement('div');
+      row.className='table-row';
+      row.innerHTML = `
+        <div class="meta">
+          <span class="badge">${escape(t.name||'T?')}</span>
+          <span class="sub">${escape(t.entries?.[0]?.name || t.notes || '…')}</span>
+        </div>
+        <div>
+          <div class="bar">
+            <div class="rem" style="width:${pct}%;"></div>
+            <div class="used" style="width:${100-pct}%"></div>
+          </div>
+        </div>
+        <div class="stat">${rem}/${cap}</div>
+      `;
+      row.addEventListener('click', ()=>{ openPanel(t.id); });
+      list.appendChild(row);
     });
-    el.addEventListener('dblclick', ()=>{
-      openEditor(t.id);
-      if(isMobile()) openPanel(true);
-    });
-
-    let drag = {active:false, dx:0, dy:0};
-    el.addEventListener('pointerdown', (e)=>{
-      if(!editMode) return; drag.active=true; el.classList.add('dragging');
-      drag.dx = e.clientX - el.offsetLeft; drag.dy = e.clientY - el.offsetTop; el.setPointerCapture(e.pointerId);
-    });
-    el.addEventListener('pointermove', (e)=>{
-      if(!drag.active) return; const nx = e.clientX - drag.dx; const ny = e.clientY - drag.dy; el.style.left = nx+ 'px'; el.style.top = ny + 'px';
-    });
-    el.addEventListener('pointerup', ()=>{
-      if(!drag.active) return; drag.active=false; el.classList.remove('dragging');
-      let nx = el.offsetLeft, ny = el.offsetTop;
-      if(snapOn){ nx = snap(nx); ny = snap(ny); el.style.left = nx + 'px'; el.style.top = ny + 'px'; }
-      const tObj = tableById(t.id); tObj.x = nx; tObj.y = ny; save();
-    });
-
-    return el;
   }
 
-  function select(id){
-    selectedId = id;
-    layer.querySelectorAll('.table-marker').forEach(n=>n.classList.toggle('selected', n.dataset.id===id));
+  // ======= toolbar =======
+  function bindToolbar(){
+    $('#addTable').onclick = ()=>{
+      const t=newTable('Custom '+(data.tables.length+1));
+      data.tables.unshift(t); save(); renderList(); openPanel(t.id);
+    };
+    $('#addPair').onclick = ()=>{
+      const n=nextAvailableNumber();
+      if(n==null){ alert('有效编号（不含4/7）已用完'); return; }
+      const left=newTable(`${n} Left`), right=newTable(`${n} Right`);
+      data.tables.unshift(right); data.tables.unshift(left);
+      save(); renderList(); openPanel(left.id);
+    };
+
+    const q=$('#q'), need=$('#need'), find=$('#find'), clear=$('#clear');
+    const run=()=>{
+      const kw=(q.value||'').trim().toLowerCase();
+      const req=Number(need.value||0);
+      const out = data.tables.filter(t=>{
+        const textHit = !kw ||
+          (t.name||'').toLowerCase().includes(kw) || (t.notes||'').toLowerCase().includes(kw) ||
+          (t.tags||[]).some(x=>String(x).toLowerCase().includes(kw)) ||
+          (t.entries||[]).some(en=> String(en.name||'').toLowerCase().includes(kw) || String(en.note||'').toLowerCase().includes(kw));
+        const spaceHit = isNaN(req) || req<=0 || remainingOf(t)>=req;
+        return textHit && spaceHit;
+      });
+      renderList(out);
+    };
+    find.onclick=run;
+    q.addEventListener('keydown',e=>{ if(e.key==='Enter') run(); });
+    need.addEventListener('keydown',e=>{ if(e.key==='Enter') run(); });
+    clear.onclick=()=>{ q.value=''; need.value=''; renderList(); };
   }
 
-  function openEditor(id){
-    select(id);
-    const t = tableById(id);
-    $('#f-name').value = t.name || '';
-    $('#f-notes').value = t.notes || '';
-    $('#f-cap').value = Number(t.capacity||0);
-    $('#f-rem').value = remainingOf(t);
-
+  // ======= editor panel =======
+  function openPanel(id){
+    selectedId=id;
+    const t = data.tables.find(x=>x.id===id); if(!t) return;
+    $('#f-name').value=t.name||'';
+    $('#f-notes').value=t.notes||'';
+    $('#f-cap').value=Number(t.capacity||0);
+    $('#f-rem').value=remainingOf(t);
     renderTags(t.tags||[]);
     renderTablePhoto(t.tablePhoto);
     renderInvList(t);
+    // reset item form
+    $('#i-name').value=''; $('#i-size').value=''; $('#i-note').value=''; renderItemPhoto(null);
+    if (window.matchMedia('(max-width: 900px)').matches) {
+      panel.classList.add('open'); toggleBtn.setAttribute('aria-expanded','true'); toggleBtn.textContent='隐藏';
+    }
+  }
+  function closePanel(){
+    panel.classList.remove('open'); toggleBtn.setAttribute('aria-expanded','false'); toggleBtn.textContent='编辑';
+  }
+  toggleBtn.onclick = ()=> panel.classList.toggle('open');
 
-    $('#i-name').value = '';
-    $('#i-size').value = '';
-    $('#i-note').value = '';
-    renderItemPhoto(null);
+  function bindPanel(){
+    $('#saveTable').onclick=()=>{
+      const t = data.tables.find(x=>x.id===selectedId); if(!t) return;
+      t.name=$('#f-name').value.trim()||t.name;
+      t.notes=$('#f-notes').value.trim();
+      t.capacity=Math.max(0, Number($('#f-cap').value||0));
+      $('#f-rem').value=remainingOf(t);
+      save(); renderList();
+    };
+    $('#deleteTable').onclick=()=>{
+      const t = data.tables.find(x=>x.id===selectedId); if(!t) return;
+      if(!confirm(`删除 ${t.name}?`)) return;
+      (t.entries||[]).forEach(en=>{ try{ localStorage.removeItem('photo:entry:'+en.id);}catch(e){} });
+      try{ localStorage.removeItem('photo:table:'+t.id);}catch(e){}
+      data.tables=data.tables.filter(x=>x.id!==t.id); save(); renderList(); closePanel();
+    };
+    $('#closePanel').onclick=()=> closePanel();
+
+    // tags
+    $('#f-tagInput').addEventListener('keydown', e=>{
+      if(e.key==='Enter' && e.target.value.trim()){
+        const t = data.tables.find(x=>x.id===selectedId); if(!t) return;
+        t.tags=t.tags||[]; t.tags.push(e.target.value.trim()); e.target.value=''; save(); renderTags(t.tags); renderList();
+      }
+    });
+
+    // table photo
+    $('#t-photo').addEventListener('change', async e=>{
+      const f=e.target.files?.[0]; if(!f) return;
+      try{ const url=await compressImage(f); const t=data.tables.find(x=>x.id===selectedId); if(!t) return; t.tablePhoto=url; save(); renderTablePhoto(url);}
+      catch{ alert('桌面照片加载失败'); }
+    });
+    $('#t-photo-clear').onclick=()=>{
+      const t=data.tables.find(x=>x.id===selectedId); if(!t) return;
+      t.tablePhoto=null; try{ localStorage.removeItem('photo:table:'+t.id); }catch{}
+      save(); renderTablePhoto(null);
+    };
+
+    // item photo + add
+    let itemPhoto=null;
+    $('#i-photo').addEventListener('change', async e=>{
+      const f=e.target.files?.[0]; if(!f) return;
+      try{ itemPhoto=await compressImage(f); renderItemPhoto(itemPhoto); }catch{ alert('物品照片加载失败'); }
+    });
+    $('#i-photo-clear').onclick=()=>{ itemPhoto=null; renderItemPhoto(null); };
+
+    $('#i-add').onclick=()=>{
+      const name=$('#i-name').value.trim();
+      const size=Number($('#i-size').value||0);
+      const note=$('#i-note').value.trim();
+      if(!name){ alert('请输入物品名'); return; }
+      if(size<0){ alert('大小需≥0'); return; }
+      const t=data.tables.find(x=>x.id===selectedId); if(!t) return;
+      const rem=remainingOf(t);
+      if(size>rem && !confirm(`大小 ${size} 超过剩余 ${rem}，仍要添加？`)) return;
+      const entry={id:eid(), name, size, note, photo:itemPhoto||null, addedAt:Date.now()};
+      t.entries.unshift(entry);
+      if(entry.photo){ try{ localStorage.setItem('photo:entry:'+entry.id, entry.photo);}catch{} }
+      $('#i-name').value=''; $('#i-size').value=''; $('#i-note').value=''; itemPhoto=null; renderItemPhoto(null);
+      $('#f-rem').value=remainingOf(t);
+      save(); renderInvList(t); renderList();
+    };
   }
 
   function renderTags(tags){
-    const box = $('#f-items'); box.innerHTML='';
-    if(!tags || !tags.length){ box.textContent='None'; box.classList.add('muted'); return }
+    const box=$('#f-tags'); box.innerHTML='';
+    if(!tags.length){ box.textContent='None'; box.classList.add('muted'); return; }
     box.classList.remove('muted');
     tags.forEach((txt,i)=>{
-      const chip = document.createElement('div'); chip.className='chip'; chip.innerHTML = `<span>${escapeHTML(txt)}</span><span class="x" title="Remove">×</span>`;
-      chip.querySelector('.x').onclick = ()=>{ const t = tableById(selectedId); t.tags.splice(i,1); renderTags(t.tags); save(); updateMarkerSubtitle(t.id); }
+      const chip=document.createElement('div'); chip.className='chip'; chip.innerHTML=`<span>${escape(txt)}</span> <span class="x">×</span>`;
+      chip.querySelector('.x').onclick=()=>{
+        const t=data.tables.find(x=>x.id===selectedId); t.tags.splice(i,1); save(); renderTags(t.tags); renderList();
+      };
       box.appendChild(chip);
     });
   }
   function renderTablePhoto(photo){
-    const box = $('#photoBox'); box.innerHTML='';
-    if(photo){ const img = new Image(); img.src = photo; box.appendChild(img); }
-    else { box.innerHTML = '<span class="muted">No Table Photo</span>'; }
+    const box=$('#t-photoBox'); box.innerHTML='';
+    if(photo){ const img=new Image(); img.src=photo; box.appendChild(img); }
+    else { box.innerHTML='<span class="muted">无桌面照片</span>'; }
   }
   function renderItemPhoto(photo){
-    const box = $('#i-photoBox'); box.innerHTML='';
-    if(photo){ const img = new Image(); img.src = photo; box.appendChild(img); }
-    else { box.innerHTML = '<span class="muted">No Photo</span>'; }
+    const box=$('#i-photoBox'); box.innerHTML='';
+    if(photo){ const img=new Image(); img.src=photo; box.appendChild(img); }
+    else { box.innerHTML='<span class="muted">无物品照片</span>'; }
   }
   function renderInvList(t){
-    const box = $('#invList'); box.innerHTML='';
-    const entries = t.entries||[];
-    if(!entries.length){ box.textContent='No items yet'; box.classList.add('muted'); return }
+    const box=$('#invList'); box.innerHTML='';
+    if(!t.entries?.length){ box.textContent='暂无'; box.classList.add('muted'); return; }
     box.classList.remove('muted');
-    entries.forEach(en=>{
-      const row = document.createElement('div'); row.className='inv-card';
-      const thumb = document.createElement('div'); thumb.className='inv-thumb';
-      if(en.photo){ const im=new Image(); im.src=en.photo; thumb.appendChild(im); } else { thumb.innerHTML='<span class="muted">No</span>'; }
-      const meta = document.createElement('div');
-      meta.innerHTML = `<div><b>${escapeHTML(en.name)}</b> <span class="tag">Size ${Number(en.size||0)}</span></div>
-                        <div class="muted" style="max-width:210px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHTML(en.note||'')}</div>
-                        <div class="muted" style="font-size:12px">Added ${escapeHTML(fmtDate(en.addedAt))}</div>`;
-      const act = document.createElement('div');
-      const del = document.createElement('button'); del.className='btn'; del.style.background='#25161a'; del.style.borderColor='#4a2a32'; del.style.color='#ff9aa9'; del.textContent='Delete';
-      del.onclick = ()=>{
-        const t0 = tableById(selectedId);
-        t0.entries = t0.entries.filter(x=>x.id!==en.id);
-        try{ localStorage.removeItem(`photo:entry:${en.id}`) }catch(e){}
-        $('#f-rem').value = remainingOf(t0);
-        save(); renderInvList(t0); updateMarkerSubtitle(t0.id);
+    t.entries.forEach(en=>{
+      const row=document.createElement('div'); row.className='inv-card';
+      const th=document.createElement('div'); th.className='inv-thumb';
+      if(en.photo){ const im=new Image(); im.src=en.photo; th.appendChild(im); } else { th.innerHTML='<span class="muted">No</span>'; }
+      const meta=document.createElement('div');
+      meta.innerHTML=`<div><b>${escape(en.name)}</b> <span class="tag">Size ${Number(en.size||0)}</span></div>
+        <div class="muted" style="max-width:210px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escape(en.note||'')}</div>
+        <div class="muted" style="font-size:12px">${new Date(en.addedAt).toLocaleString()}</div>`;
+      const act=document.createElement('div');
+      const del=document.createElement('button'); del.className='btn'; del.style.background='#25161a'; del.style.borderColor='#4a2a32'; del.style.color='#ff9aa9'; del.textContent='删除';
+      del.onclick=()=>{
+        const tv=data.tables.find(x=>x.id===selectedId);
+        tv.entries=tv.entries.filter(x=>x.id!==en.id);
+        try{ localStorage.removeItem('photo:entry:'+en.id);}catch{}
+        save(); $('#f-rem').value=remainingOf(tv); renderInvList(tv); renderList();
       };
       act.appendChild(del);
-
-      row.appendChild(thumb); row.appendChild(meta); row.appendChild(act);
-      box.appendChild(row);
+      row.appendChild(th); row.appendChild(meta); row.appendChild(act); box.appendChild(row);
     });
   }
-  function updateMarkerSubtitle(id){
-    const t = tableById(id);
-    const node = layer.querySelector(`.table-marker[data-id="${id}"]`);
-    node?.querySelector('.marker-name')?.replaceChildren(document.createTextNode(topSubtitle(t)));
-  }
 
-  function bindEditor(){
-    $('#f-itemInput').addEventListener('keydown', (e)=>{
-      if(e.key==='Enter' && e.target.value.trim()){
-        const t = tableById(selectedId); if(!t) return;
-        t.tags = t.tags || []; t.tags.push(e.target.value.trim()); e.target.value='';
-        renderTags(t.tags); save(); updateMarkerSubtitle(t.id);
-      }
+  // helpers
+  function escape(s){return (s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+  function compressImage(file,{maxW=1280,maxH=1280,quality=0.82}={}){
+    return new Promise((resolve,reject)=>{
+      const r=new FileReader();
+      r.onload=()=>{ const img=new Image(); img.onload=()=>{
+          const w=img.naturalWidth||img.width,h=img.naturalHeight||img.height;
+          const ratio=Math.min(1,maxW/w,maxH/h), cw=Math.max(1,Math.round(w*ratio)), ch=Math.max(1,Math.round(h*ratio));
+          const c=document.createElement('canvas'); c.width=cw; c.height=ch; const ctx=c.getContext('2d'); ctx.drawImage(img,0,0,cw,ch);
+          try{ resolve(c.toDataURL('image/jpeg',quality)); }catch(e){ reject(e); }
+        }; img.onerror=reject; img.src=r.result; };
+      r.onerror=reject; r.readAsDataURL(file);
     });
-
-    $('#f-photo').addEventListener('change', async (e)=>{
-      const file = e.target.files?.[0]; if(!file) return;
-      try{
-        const dataUrl = await compressImage(file, {maxW: 1280, maxH: 1280, quality: 0.82});
-        const t = tableById(selectedId); if(!t) return; t.tablePhoto = dataUrl; renderTablePhoto(t.tablePhoto); save();
-      }catch(err){ console.error(err); alert('Failed to load table photo.'); }
-    });
-
-    $('#saveBtn').onclick = ()=>{
-      const t = tableById(selectedId); if(!t) return;
-      t.name   = $('#f-name').value.trim()||t.name;
-      t.notes  = $('#f-notes').value.trim();
-      t.capacity = Math.max(0, Number($('#f-cap').value||0));
-      $('#f-rem').value = remainingOf(t);
-
-      const node = layer.querySelector(`.table-marker[data-id="${t.id}"]`);
-      node?.querySelector('.table-badge')?.replaceChildren(document.createTextNode(t.name||'T?'));
-      updateMarkerSubtitle(t.id);
-      save(); flash(node);
-    };
-
-    $('#deleteBtn').onclick = ()=>{
-      const t = tableById(selectedId); if(!t) return; if(!confirm(`Delete ${t.name || 'this table'}?`)) return;
-      (t.entries||[]).forEach(en=>{ try{ localStorage.removeItem(`photo:entry:${en.id}`) }catch(e){} });
-      data.tables = data.tables.filter(x=>x.id!==t.id);
-      try{ localStorage.removeItem(`photo:table:${t.id}`) }catch(e){}
-      save(); renderAll(); selectedId=null; if(isMobile()) openPanel(false);
-    };
-
-    $('#closeBtn').onclick = ()=>{ selectedId=null; layer.querySelectorAll('.table-marker').forEach(n=>n.classList.remove('selected')); if(isMobile()) openPanel(false); };
-
-    // add item entry
-    let itemPhotoData = null;
-    $('#i-photo').addEventListener('change', async (e)=>{
-      const f = e.target.files?.[0]; if(!f) return;
-      try{
-        itemPhotoData = await compressImage(f, {maxW: 1280, maxH: 1280, quality: 0.82});
-        renderItemPhoto(itemPhotoData);
-      }catch(err){ console.error(err); alert('Failed to load item photo.'); }
-    });
-    $('#i-clear').onclick = ()=>{ itemPhotoData = null; renderItemPhoto(null); };
-
-    $('#i-add').onclick = ()=>{
-      const name = $('#i-name').value.trim();
-      const size = Number($('#i-size').value||0);
-      const note = $('#i-note').value.trim();
-      if(!name){ alert('Please enter item name'); return; }
-      if(size<0){ alert('Size must be ≥ 0'); return; }
-
-      const t = tableById(selectedId); if(!t) return;
-      const rem = remainingOf(t);
-      if(size > rem && !confirm(`Size ${size} exceeds remaining ${rem}. Add anyway?`)) return;
-
-      const entry = { id:eid(), name, size, note, photo:itemPhotoData||null, addedAt: Date.now() };
-      t.entries = t.entries || []; t.entries.unshift(entry);
-      $('#f-rem').value = remainingOf(t);
-
-      if(entry.photo){ try{ localStorage.setItem(`photo:entry:${entry.id}`, entry.photo); }catch(e){} }
-
-      $('#i-name').value=''; $('#i-size').value=''; $('#i-note').value=''; itemPhotoData=null; renderItemPhoto(null);
-
-      save(); renderInvList(t); updateMarkerSubtitle(t.id);
-    };
   }
 
-  function flash(node){ if(!node) return; node.classList.add('pulse'); setTimeout(()=> node.classList.remove('pulse'), 600) }
-
-  function bindToolbar(){
-    $('#addTableBtn').onclick = ()=>{
-      const t = newTable(`Custom ${data.tables.length+1}`, Math.round(board.clientWidth/2-40+Math.random()*60), 80+Math.round(Math.random()*40));
-      data.tables.push(t); save(); renderAll(); select(t.id); openEditor(t.id); if(isMobile()) openPanel(true);
-    };
-
-    $('#addPairBtn').onclick = ()=>{
-      const n = nextAvailableNumber();
-      if(n==null){ alert('All valid numbers (without 4/7) are already used.'); return; }
-      const baseX = Math.round(board.clientWidth/2 - 60);
-      const baseY = Math.round(80 + Math.random()*40);
-      const left  = newTable(`${n} Left`,  baseX-26, baseY);
-      const right = newTable(`${n} Right`, baseX+26, baseY);
-      data.tables.push(left,right); save(); renderAll(); select(left.id); openEditor(left.id); if(isMobile()) openPanel(true);
-    };
-
-    $('#toggleEditBtn').onclick = ()=>{
-      editMode = !editMode; $('#toggleEditBtn').textContent = `Layout Mode: ${editMode?'ON':'OFF'}`; $('#toggleEditBtn').classList.toggle('warn', !editMode);
-      board.classList.toggle('editing', editMode);
-    };
-    $('#snapBtn').onclick = ()=>{
-      snapOn = !snapOn; $('#snapBtn').textContent = `Snap: ${snapOn?'ON':'OFF'}`; $('#snapBtn').classList.toggle('ghost', !snapOn);
-    };
-
-    $('#resetBtn').onclick = ()=>{ if(confirm('Reset all tables? This will remove current map data.')){ data = seed(); save(); renderAll(); } };
-
-    $('#bgFile').addEventListener('change', (e)=>{
-      const f = e.target.files?.[0]; if(!f) return; const r = new FileReader(); r.onload = ()=>{ setBackground(r.result) }; r.readAsDataURL(f);
-    });
-
-    const search = $('#search'), list = $('#resultList'), needSpace = $('#needSpace');
-    const runSearch = ()=>{
-      const q = (search.value||'').trim().toLowerCase();
-      const need = Number(needSpace.value||0);
-      list.innerHTML=''; layer.querySelectorAll('.table-marker').forEach(n=> n.classList.remove('pulse'));
-
-      const matches = data.tables.filter(t=>{
-        const textHit = !q || (t.name||'').toLowerCase().includes(q) || (t.notes||'').toLowerCase().includes(q)
-          || (t.tags||[]).some(k=> String(k).toLowerCase().includes(q))
-          || (t.entries||[]).some(en=> String(en.name||'').toLowerCase().includes(q) || String(en.note||'').toLowerCase().includes(q));
-        const spaceHit = isNaN(need) || need<=0 || remainingOf(t) >= need;
-        return textHit && spaceHit;
-      });
-
-      matches.forEach(t=>{
-        const row = document.createElement('div'); row.className='match';
-        const desc = `${escapeHTML(topSubtitle(t))} · Rem ${remainingOf(t)}/${t.capacity||0}`;
-        row.innerHTML = `<div><b>${escapeHTML(t.name)}</b><div class="muted" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${desc}</div></div>
-                         <div style="display:flex;gap:.4rem"><button class="btn">Focus</button>
-                         ${(!isNaN(Number(need)) && Number(need)>0 && remainingOf(t)>=Number(need)) ? '<span class="tag">Fit</span>' : ''}</div>`;
-        row.querySelector('button').onclick = ()=> focusTable(t.id);
-        list.appendChild(row);
-      });
-      matches.forEach(t=> flash(layer.querySelector(`.table-marker[data-id="${t.id}"]`)) );
-      if(matches.length===1) focusTable(matches[0].id);
-      if(isMobile() && matches.length>0) openPanel(true);
-    };
-    $('#runSearch').onclick = runSearch;
-    search.addEventListener('keydown', (e)=>{ if(e.key==='Enter') runSearch() });
-    needSpace.addEventListener('keydown', (e)=>{ if(e.key==='Enter') runSearch() });
-    $('#clearSearch').onclick = ()=>{ search.value=''; needSpace.value=''; list.innerHTML=''; layer.querySelectorAll('.table-marker').forEach(n=> n.classList.remove('pulse')) };
-
-    function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
-    $('#zoomInBtn').onclick  = ()=>{ zoom = clamp(zoom*1.1, 0.5, 3); applyZoom(); };
-    $('#zoomOutBtn').onclick = ()=>{ zoom = clamp(zoom/1.1, 0.5, 3); applyZoom(); };
-    board.addEventListener('wheel', (e)=>{
-      if(!(e.ctrlKey || e.metaKey)) return;
-      e.preventDefault();
-      const old = zoom;
-      zoom = clamp(zoom * (e.deltaY>0 ? 0.9 : 1.1), 0.5, 3);
-      applyZoom();
-
-      const rect = board.getBoundingClientRect();
-      const cx = e.clientX - rect.left + board.scrollLeft;
-      const cy = e.clientY - rect.top  + board.scrollTop;
-      const ratio = zoom / old;
-      board.scrollTo({ left: cx*ratio - (e.clientX - rect.left), top: cy*ratio - (e.clientY - rect.top) });
-    }, {passive:false});
-  }
-
-  function applyZoom(){
-    layer.style.transform = `scale(${zoom})`;
-    $('#grid').style.transform = `scale(${zoom})`;
-    board.style.backgroundSize = `${100*zoom}% auto`;
-  }
-
-  function focusTable(id){
-    const node = layer.querySelector(`.table-marker[data-id="${id}"]`); if(!node) return;
-    const rect = node.getBoundingClientRect(); const parent = board.getBoundingClientRect();
-    board.scrollTo({ left: node.offsetLeft*zoom - parent.width/2 + rect.width/2, top: node.offsetTop*zoom - parent.height/2 + rect.height/2, behavior:'smooth' });
-    flash(node); select(id); openEditor(id);
-  }
-
-  function openPanel(show){
-    if(!isMobile()) return;
-    editor.classList.toggle('open', !!show);
-    const expanded = !!show; if(togglePanelBtn){ togglePanelBtn.setAttribute('aria-expanded', String(expanded)); togglePanelBtn.textContent = expanded ? 'Hide' : 'Edit'; }
-  }
-
-  function parseNumberAndSide(name){
-    const m = String(name||'').trim().match(/^(\d{1,2})\s+(left|right)$/i);
-    if(!m) return null;
-    return { num: parseInt(m[1],10), side: m[2].toLowerCase() };
-  }
+  // numbering (for Add Pair)
+  function parseNumberAndSide(name){ const m=String(name||'').trim().match(/^(\d{1,2})\s+(left|right)$/i); return m?{num:parseInt(m[1],10),side:m[2].toLowerCase()}:null; }
   function isValidNumber(n){ return n>=1 && n<=88 && !/[47]/.test(String(n).padStart(2,'0')); }
-  function usedSidesByNumber(){
-    const map = new Map();
-    for(const t of data.tables){
-      const p = parseNumberAndSide(t.name);
-      if(!p || !isValidNumber(p.num)) continue;
-      if(!map.has(p.num)) map.set(p.num, new Set());
-      map.get(p.num).add(p.side);
-    }
-    return map;
-  }
   function nextAvailableNumber(){
-    const m = usedSidesByNumber();
-    for(let n=1;n<=88;n++){
-      if(!isValidNumber(n)) continue;
-      const sides = m.get(n);
-      if(!sides || sides.size<2) return n;
-    }
+    const used=new Map();
+    for(const t of data.tables){ const p=parseNumberAndSide(t.name); if(!p || !isValidNumber(p.num)) continue; if(!used.has(p.num)) used.set(p.num,new Set()); used.get(p.num).add(p.side); }
+    for(let n=1;n<=88;n++){ if(!isValidNumber(n)) continue; const s=used.get(n); if(!s || s.size<2) return n; }
     return null;
-  }
-
-  function compressImage(file, {maxW=1280, maxH=1280, quality=0.82}={}){
-    return new Promise((resolve, reject)=>{
-      const reader = new FileReader();
-      reader.onerror = reject;
-      reader.onload = ()=>{
-        const img = new Image();
-        img.onload = ()=>{
-          let w = img.naturalWidth || img.width;
-          let h = img.naturalHeight || img.height;
-          const ratio = Math.min(1, maxW / w, maxH / h);
-          const cw = Math.max(1, Math.round(w * ratio));
-          const ch = Math.max(1, Math.round(h * ratio));
-          const canvas = document.createElement('canvas');
-          canvas.width = cw; canvas.height = ch;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, cw, ch);
-          try{ resolve(canvas.toDataURL('image/jpeg', quality)); }
-          catch(e){ reject(e) }
-        };
-        img.onerror = reject;
-        img.src = reader.result;
-      };
-      reader.readAsDataURL(file);
-    });
   }
 })();
 </script>
