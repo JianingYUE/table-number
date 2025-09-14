@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-  <title>Interactive 2D Table Map</title>
+  <title>Interactive 2D Table Map – Inventory Mode</title>
   <style>
     :root{
       --bg:#0b0d10; --card:#12161b; --muted:#8892a6; --text:#e6edf3; --accent:#6aa6ff; --good:#38d39f; --warn:#ffb86b; --danger:#ff6b6b;
@@ -12,7 +12,6 @@
     html,body{height:100%}
     body{margin:0;background:linear-gradient(180deg,#0a0c10,#0d1117);color:var(--text);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji"}
 
-    /* Header & toolbar */
     header{position:sticky;top:0;z-index:6;background:rgba(13,17,23,.92);backdrop-filter:saturate(1.2) blur(8px);border-bottom:1px solid #202632;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;padding:.6rem .9rem}
     .toolbar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;width:100%}
     .toolbar input[type="text"]{min-width:230px}
@@ -21,28 +20,26 @@
     .btn.primary{background:linear-gradient(180deg,#2a5fff,#1b50e6);border-color:#2c57d0}
     .btn.ghost{background:transparent}
     .btn.warn{background:#312312;border-color:#5a3b13;color:#ffcc88}
-    input[type="text"], textarea, select{background:#0f1318;border:1px solid #2a3240;color:var(--text);border-radius:.6rem;padding:.55rem .6rem;outline:none}
+    input[type="text"], input[type="number"], textarea, select{background:#0f1318;border:1px solid #2a3240;color:var(--text);border-radius:.6rem;padding:.55rem .6rem;outline:none}
     textarea{min-height:84px;resize:vertical}
 
-    /* Layout */
-    .wrap{display:grid;grid-template-columns: 1fr 360px;gap:0;border-top:1px solid #161b22;min-height:calc(100vh - 56px)}
+    .wrap{display:grid;grid-template-columns: 1fr 380px;gap:0;border-top:1px solid #161b22;min-height:calc(100vh - 56px)}
     .panel{border-left:1px solid #202632;background:#0d1117;position:relative}
 
-    /* Map area */
     #stage{position:relative;overflow:auto;background:#0b0e13}
-    .board{position:relative;margin:12px;border:1px solid #202632;border-radius:16px;min-height:72vh;background:#0c1016;background-size:contain;background-repeat:no-repeat;background-position:center}
+    .board{position:relative;margin:12px;border:1px solid #202632;border-radius:16px;min-height:72vh;background:#0c1016;background-size:contain;background-repeat:no-repeat;background-position:center; overflow:auto}
     #grid{position:absolute;inset:0;pointer-events:none;background-image: radial-gradient(circle at 1px 1px,#1a2230 1px,transparent 0);background-size:20px 20px;opacity:.35}
+    #layer{position:absolute; inset:0; transform-origin:0 0;}
 
-    .table-marker{position:absolute;min-width:52px;min-height:52px;display:flex;align-items:center;justify-content:center;padding:6px 10px;border-radius:14px;border:1px solid #2a3240;background:#10151c;box-shadow:0 4px 16px rgba(0,0,0,.35);cursor:pointer;user-select:none;transition:transform .15s ease, box-shadow .15s ease, border-color .2s}
+    .table-marker{position:absolute;min-width:54px;min-height:54px;display:flex;align-items:center;justify-content:center;padding:6px 10px;border-radius:14px;border:1px solid #2a3240;background:#10151c;box-shadow:0 4px 16px rgba(0,0,0,.35);cursor:pointer;user-select:none;transition:transform .15s ease, box-shadow .15s ease, border-color .2s}
     .table-marker:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.45)}
     .table-marker.selected{border-color:var(--accent);box-shadow:0 0 0 2px rgba(106,166,255,.25)}
     .table-badge{font-weight:700;border-radius:10px;padding:.1rem .45rem;margin-right:.4rem;background:#152032;border:1px solid #243042}
-    .marker-name{font-weight:600;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .marker-name{font-weight:600;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .pulse{box-shadow:0 0 0 2px rgba(56,211,159,.2),0 0 0 6px rgba(56,211,159,.08)}
     .table-marker.dragging .drag-handle{display:block}
     .drag-handle{position:absolute;inset:-6px;border:2px dashed #304055;border-radius:16px;display:none}
 
-    /* Side editor */
     .panel h3{margin:16px;font-size:16px}
     .form{display:flex;flex-direction:column;gap:.6rem;padding:0 16px 16px}
     .form .row{display:grid;grid-template-columns:1fr;gap:.5rem}
@@ -54,7 +51,7 @@
     .chip .x{font-weight:700;opacity:.7}
     .muted{color:var(--muted)}
 
-    .list{max-height:220px;overflow:auto;border-top:1px solid #202632;padding:8px 16px}
+    .list{max-height:240px;overflow:auto;border-top:1px solid #202632;padding:8px 16px}
     .list .match{padding:6px 8px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;border:1px solid #243042;margin-bottom:6px}
 
     .foot{position:absolute;bottom:0;left:0;right:0;padding:10px 16px;border-top:1px solid #202632;display:flex;gap:.5rem}
@@ -63,20 +60,25 @@
     .hint{padding:10px 16px;color:#a6b2c0;border-top:1px solid #202632}
     .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,monospace;background:#12161b;padding:.1rem .35rem;border-radius:6px;border:1px solid #202632}
 
-    /* Mobile enhancements */
+    .inv{border-top:1px solid #202632;margin-top:6px;padding:8px 16px;max-height:220px;overflow:auto}
+    .inv-card{display:flex;gap:.6rem;align-items:center;border:1px solid #243042;border-radius:10px;padding:6px 8px;margin-bottom:8px}
+    .inv-thumb{width:56px;height:42px;flex:0 0 56px;background:#0f1318;border:1px solid #2a3240;border-radius:8px;overflow:hidden;display:grid;place-items:center}
+    .inv-thumb img{width:100%;height:100%;object-fit:cover}
+    .tag{display:inline-block;background:#152032;border:1px solid #243042;padding:.1rem .4rem;border-radius:999px;font-weight:600}
+
     .mobile-toggle{display:none}
     @media (max-width: 900px){
       .wrap{grid-template-columns:1fr}
       #stage{height:calc(100vh - 56px)}
       .board{min-height:60vh;margin:8px}
-      .panel{position:fixed;left:0;right:0;bottom:0;height:60vh;border-left:none;border-top:1px solid #202632;border-radius:16px 16px 0 0;transform:translateY(100%);transition:transform .25s ease;z-index:7}
+      .panel{position:fixed;left:0;right:0;bottom:0;height:68vh;border-left:none;border-top:1px solid #202632;border-radius:16px 16px 0 0;transform:translateY(100%);transition:transform .25s ease;z-index:7}
       .panel.open{transform:translateY(0)}
       .foot{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
       .toolbar{overflow:auto;white-space:nowrap;width:100%}
       .toolbar > *{flex:0 0 auto}
       .toolbar input[type="text"]{min-width:180px}
       .table-marker{min-width:56px;min-height:56px}
-      .marker-name{max-width:110px}
+      .marker-name{max-width:120px}
       .mobile-toggle{display:block;position:fixed;right:12px;bottom:12px;z-index:8}
     }
   </style>
@@ -86,12 +88,16 @@
     <div class="toolbar">
       <label class="btn ghost">Upload Floorplan<input id="bgFile" type="file" accept="image/*" hidden></label>
       <button id="addTableBtn" class="btn">Add Table</button>
+      <button id="addPairBtn" class="btn">Add Pair</button>
       <button id="toggleEditBtn" class="btn warn" title="Drag markers to reposition">Layout Mode: OFF</button>
-      <input id="search" type="text" placeholder="Search items/table/notes… (Enter to focus)" />
+      <button id="snapBtn" class="btn ghost" title="Snap / Unsnap to 20px grid">Snap: ON</button>
+      <input id="search" type="text" placeholder="Search item/table/notes…" />
+      <input id="needSpace" type="number" step="1" min="0" style="width:110px" placeholder="Need space" title="Find tables with remaining ≥ this number"/>
+      <button id="runSearch" class="btn ghost">Find</button>
       <button id="clearSearch" class="btn ghost">Clear</button>
-      <button id="exportBtn" class="btn ghost">Export</button>
-      <label class="btn ghost">Import<input id="importFile" type="file" accept="application/json" hidden></label>
       <button id="resetBtn" class="btn ghost" title="Reset all data (keep background)">Reset</button>
+      <button id="zoomOutBtn" class="btn ghost">−</button>
+      <button id="zoomInBtn" class="btn ghost">＋</button>
     </div>
   </header>
 
@@ -99,6 +105,7 @@
     <main id="stage">
       <div id="board" class="board">
         <div id="grid"></div>
+        <div id="layer"></div>
       </div>
     </main>
 
@@ -106,19 +113,50 @@
       <h3>Table Info</h3>
       <div class="form">
         <div class="row"><label>Table No / Name<input id="f-name" type="text" placeholder="e.g. 12 Left or Private Room A"/></label></div>
-        <div class="row"><label>Notes<textarea id="f-notes" placeholder="Internal notes, special requirements, etc"></textarea></label></div>
         <div class="row">
-          <label>Items (press Enter to add)<input id="f-itemInput" type="text" placeholder="e.g. Birthday cake, Camera, Thermos" /></label>
+          <div style="display:grid;grid-template-columns:1fr 1fr; gap:.5rem">
+            <label>Total Capacity<input id="f-cap" type="number" min="0" step="1" placeholder="e.g. 100"/></label>
+            <label>Remaining<input id="f-rem" type="number" disabled/></label>
+          </div>
+        </div>
+        <div class="row"><label>Notes<textarea id="f-notes" placeholder="Internal notes, special requirements, etc"></textarea></label></div>
+
+        <div class="row" style="border-top:1px solid #202632;padding-top:8px">
+          <strong>Add Item into this Table</strong>
+          <label>Item Name<input id="i-name" type="text" placeholder="e.g. Birthday cake / Thermos / Camera bag"/></label>
+          <div style="display:grid;grid-template-columns:1fr 1fr; gap:.5rem">
+            <label>Size<input id="i-size" type="number" min="0" step="1" placeholder="e.g. 10"/></label>
+            <label>Note (optional)<input id="i-note" type="text" placeholder="e.g. top left corner"/></label>
+          </div>
+          <div class="photo" id="i-photoBox"><span class="muted">No Photo</span></div>
+          <div style="display:flex;gap:.5rem;align-items:center">
+            <label class="btn ghost" style="width:max-content;">Item Photo<input id="i-photo" type="file" accept="image/*" hidden></label>
+            <button id="i-clear" class="btn ghost">Clear Photo</button>
+            <div class="sp"></div>
+            <button id="i-add" class="btn primary">Save Item</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <strong>Items in this Table</strong>
+          <div id="invList" class="inv muted">No items yet</div>
+        </div>
+
+        <div class="row">
+          <label>Quick Tags (Enter to add)<input id="f-itemInput" type="text" placeholder="e.g. Fragile, VIP"/></label>
           <div id="f-items" class="items muted">None</div>
         </div>
+
         <div class="row">
-          <div class="photo" id="photoBox"><span class="muted">No Photo</span></div>
-          <label class="btn ghost" style="width:max-content; margin-top:.4rem">Update Photo<input id="f-photo" type="file" accept="image/*" hidden></label>
+          <div class="photo" id="photoBox"><span class="muted">No Table Photo</span></div>
+          <label class="btn ghost" style="width:max-content; margin-top:.4rem">Update Table Photo<input id="f-photo" type="file" accept="image/*" hidden></label>
         </div>
       </div>
-      <div class="hint">Tip: In <span class="kbd">Layout Mode</span> you can drag markers. Double-click a marker to quickly edit.</div>
+
+      <div class="hint">Tip: Use <span class="kbd">Layout Mode</span> to drag markers. Double-click a marker to edit. Item photos & table photos are stored separately to reduce quota risk.</div>
+
       <div class="foot">
-        <button id="saveBtn" class="btn primary">Save</button>
+        <button id="saveBtn" class="btn primary">Save Table</button>
         <button id="deleteBtn" class="btn" style="background:#25161a;border-color:#4a2a32;color:#ff9aa9">Delete Table</button>
         <div class="sp"></div>
         <button id="closeBtn" class="btn ghost">Close</button>
@@ -135,63 +173,70 @@
   const $ = sel => document.querySelector(sel);
   const $$ = sel => Array.from(document.querySelectorAll(sel));
   const board = $('#board');
+  const layer = $('#layer');
   const editor = $('#editor');
   const togglePanelBtn = $('#togglePanel');
-  const stateKey = 'tableMapState.v2'; // v2: split photo storage to avoid quota issues
-  const bgKey = 'tableMapBG.v1';
+  const stateKey = 'tableMapState.inv.v1';
+  const bgKey    = 'tableMapBG.v1';
   let data = load() || seed();
   let selectedId = null;
   let editMode = false;
+  let snapOn = true;
+  let zoom = 1;
+  const GRID = 20;
 
   const isMobile = () => window.matchMedia('(max-width: 900px)').matches;
 
-  // ----- init -----
   renderBackground();
+  applyZoom();
   renderAll();
   bindToolbar();
   bindEditor();
 
   function uid(){return 't' + Math.random().toString(36).slice(2,9)}
+  function eid(){return 'e' + Math.random().toString(36).slice(2,9)}
 
-  // Generate 1–88, exclude any number containing 4 or 7 in either digit; create Left/Right for each
   function seed(){
     const tables = [];
-    const startX = 64;      // left padding (slightly tighter for mobile)
-    const startY = 64;      // top padding
-    const cellW  = 128;     // horizontal spacing between numbers (not L/R)
-    const cellH  = 104;     // vertical spacing
-    const cols   = 8;       // numbers per row
-
+    const startX = 64, startY = 64, cellW = 128, cellH = 104, cols = 8;
     const isValid = (n)=> !/[47]/.test(String(n).padStart(2,'0'));
-
     let index = 0;
-    for(let n=1; n<=88; n++){
+    for(let n=1;n<=88;n++){
       if(!isValid(n)) continue;
       const row = Math.floor(index / cols);
       const col = index % cols;
       const baseX = startX + col*cellW;
       const baseY = startY + row*cellH;
-      tables.push({id:uid(), x:baseX-26, y:baseY, name:`${n} Left`, notes:'', items:[], photo:null});
-      tables.push({id:uid(), x:baseX+26, y:baseY, name:`${n} Right`, notes:'', items:[], photo:null});
+      tables.push(newTable(`${n} Left`,  baseX-26, baseY));
+      tables.push(newTable(`${n} Right`, baseX+26, baseY));
       index++;
     }
     return { tables };
   }
 
-  // ----- persistence (split photos) -----
+  function newTable(name, x=80, y=80){
+    return { id:uid(), x, y, name, notes:'', tags:[], tablePhoto:null, capacity:100, entries:[] };
+  }
+
   function save(){
     try{
       const slim = { tables: data.tables.map(t=>{
-        if(t.photo){ try{ localStorage.setItem(`photo:${t.id}`, t.photo); }catch(e){} }
-        const {photo, ...rest} = t;
-        return rest;
+        if(t.tablePhoto){ try{ localStorage.setItem(`photo:table:${t.id}`, t.tablePhoto); }catch(e){} }
+        (t.entries||[]).forEach(en=>{
+          if(en.photo){ try{ localStorage.setItem(`photo:entry:${en.id}`, en.photo); }catch(e){} }
+        });
+        const {tablePhoto, entries, ...rest} = t;
+        const slimEntries = (entries||[]).map(en=>{
+          const {photo, ...r} = en; return r;
+        });
+        return {...rest, entries: slimEntries};
       })};
       localStorage.setItem(stateKey, JSON.stringify(slim));
       return true;
     }catch(e){
       console.error('Save failed', e);
       const msg = /quota|NS_ERROR_DOM_QUOTA_REACHED|NotAllowedError/i.test(String(e))
-        ? 'Save failed: storage is blocked or full (Private/Incognito mode on iOS may block storage). Try turning off Private Browsing, compressing photos, or clearing old data (Export first).'
+        ? 'Save failed: storage blocked/full. Try disabling Private Mode, compressing photos, or clearing old data.'
         : 'Save failed due to an unexpected error.';
       alert(msg);
       return false;
@@ -203,8 +248,12 @@
       if(!raw) return null;
       const slim = JSON.parse(raw);
       const tables = (slim.tables||[]).map(t=>{
-        const photo = localStorage.getItem(`photo:${t.id}`) || null;
-        return {...t, photo};
+        const tablePhoto = localStorage.getItem(`photo:table:${t.id}`) || null;
+        const entries = (t.entries||[]).map(en=>{
+          const photo = localStorage.getItem(`photo:entry:${en.id}`) || null;
+          return {...en, photo};
+        });
+        return {...t, tablePhoto, entries};
       });
       return {tables};
     }catch(e){ console.error('Load failed', e); return null }
@@ -218,10 +267,24 @@
     if(bg){ board.style.backgroundImage = `url(${bg})` }
   }
 
-  // ----- render markers -----
+  function tableById(id){ return data.tables.find(x=>x.id===id) }
+  function remainingOf(t){
+    const cap = Number(t.capacity||0);
+    const used = (t.entries||[]).reduce((s,en)=> s + Number(en.size||0), 0);
+    return Math.max(0, cap - used);
+  }
+  function topSubtitle(t){
+    if(t.entries && t.entries.length){ return `${t.entries[0].name}`.slice(0,22) }
+    if(t.notes) return t.notes.slice(0,22);
+    return `Rem ${remainingOf(t)}/${t.capacity||0}`;
+  }
+  function snap(v){ return Math.round(v / GRID) * GRID; }
+  function escapeHTML(s){return (s??'').replace(/[&<>"']/g, m=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]))}
+  function fmtDate(ts){ const d = ts? new Date(ts) : new Date(); return d.toLocaleString(); }
+
   function renderAll(){
-    board.querySelectorAll('.table-marker').forEach(n=>n.remove());
-    data.tables.forEach(t=> board.appendChild(markerNode(t)) );
+    layer.querySelectorAll('.table-marker').forEach(n=>n.remove());
+    data.tables.forEach(t=> layer.appendChild(markerNode(t)) );
   }
 
   function markerNode(t){
@@ -232,10 +295,10 @@
     el.dataset.id = t.id;
     el.innerHTML = `<span class="table-badge"></span><span class="marker-name"></span><div class="drag-handle"></div>`;
     el.querySelector('.table-badge').textContent = t.name || 'T?';
-    el.querySelector('.marker-name').textContent = (t.items?.[0] || t.notes || '').slice(0,22);
+    el.querySelector('.marker-name').textContent = topSubtitle(t);
 
     el.addEventListener('click', ()=>{
-      if(editMode) return; // avoid click while dragging
+      if(editMode) return;
       select(t.id);
       openEditor(t.id);
       if(isMobile()) openPanel(true);
@@ -245,7 +308,6 @@
       if(isMobile()) openPanel(true);
     });
 
-    // drag position in edit mode
     let drag = {active:false, dx:0, dy:0};
     el.addEventListener('pointerdown', (e)=>{
       if(!editMode) return; drag.active=true; el.classList.add('dragging');
@@ -256,154 +318,292 @@
     });
     el.addEventListener('pointerup', ()=>{
       if(!drag.active) return; drag.active=false; el.classList.remove('dragging');
-      const tObj = data.tables.find(x=>x.id===t.id); tObj.x = el.offsetLeft; tObj.y = el.offsetTop; save();
+      let nx = el.offsetLeft, ny = el.offsetTop;
+      if(snapOn){ nx = snap(nx); ny = snap(ny); el.style.left = nx + 'px'; el.style.top = ny + 'px'; }
+      const tObj = tableById(t.id); tObj.x = nx; tObj.y = ny; save();
     });
 
     return el;
   }
 
   function select(id){
-    selectedId = id; $$('.table-marker').forEach(n=>n.classList.toggle('selected', n.dataset.id===id));
+    selectedId = id;
+    layer.querySelectorAll('.table-marker').forEach(n=>n.classList.toggle('selected', n.dataset.id===id));
   }
 
-  // ----- editor -----
   function openEditor(id){
     select(id);
-    const t = data.tables.find(x=>x.id===id);
+    const t = tableById(id);
     $('#f-name').value = t.name || '';
     $('#f-notes').value = t.notes || '';
-    renderItems(t.items);
-    renderPhoto(t.photo);
+    $('#f-cap').value = Number(t.capacity||0);
+    $('#f-rem').value = remainingOf(t);
+
+    renderTags(t.tags||[]);
+    renderTablePhoto(t.tablePhoto);
+    renderInvList(t);
+
+    $('#i-name').value = '';
+    $('#i-size').value = '';
+    $('#i-note').value = '';
+    renderItemPhoto(null);
   }
-  function renderItems(items){
+
+  function renderTags(tags){
     const box = $('#f-items'); box.innerHTML='';
-    if(!items || items.length===0){ box.textContent='None'; box.classList.add('muted'); return }
+    if(!tags || !tags.length){ box.textContent='None'; box.classList.add('muted'); return }
     box.classList.remove('muted');
-    items.forEach((txt,i)=>{
+    tags.forEach((txt,i)=>{
       const chip = document.createElement('div'); chip.className='chip'; chip.innerHTML = `<span>${escapeHTML(txt)}</span><span class="x" title="Remove">×</span>`;
-      chip.querySelector('.x').onclick = ()=>{ const t = current(); t.items.splice(i,1); renderItems(t.items); save(); }
+      chip.querySelector('.x').onclick = ()=>{ const t = tableById(selectedId); t.tags.splice(i,1); renderTags(t.tags); save(); updateMarkerSubtitle(t.id); }
       box.appendChild(chip);
     });
   }
-  function renderPhoto(photo){
+  function renderTablePhoto(photo){
     const box = $('#photoBox'); box.innerHTML='';
+    if(photo){ const img = new Image(); img.src = photo; box.appendChild(img); }
+    else { box.innerHTML = '<span class="muted">No Table Photo</span>'; }
+  }
+  function renderItemPhoto(photo){
+    const box = $('#i-photoBox'); box.innerHTML='';
     if(photo){ const img = new Image(); img.src = photo; box.appendChild(img); }
     else { box.innerHTML = '<span class="muted">No Photo</span>'; }
   }
-  function current(){ return data.tables.find(x=>x.id===selectedId) }
+  function renderInvList(t){
+    const box = $('#invList'); box.innerHTML='';
+    const entries = t.entries||[];
+    if(!entries.length){ box.textContent='No items yet'; box.classList.add('muted'); return }
+    box.classList.remove('muted');
+    entries.forEach(en=>{
+      const row = document.createElement('div'); row.className='inv-card';
+      const thumb = document.createElement('div'); thumb.className='inv-thumb';
+      if(en.photo){ const im=new Image(); im.src=en.photo; thumb.appendChild(im); } else { thumb.innerHTML='<span class="muted">No</span>'; }
+      const meta = document.createElement('div');
+      meta.innerHTML = `<div><b>${escapeHTML(en.name)}</b> <span class="tag">Size ${Number(en.size||0)}</span></div>
+                        <div class="muted" style="max-width:210px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHTML(en.note||'')}</div>
+                        <div class="muted" style="font-size:12px">Added ${escapeHTML(fmtDate(en.addedAt))}</div>`;
+      const act = document.createElement('div');
+      const del = document.createElement('button'); del.className='btn'; del.style.background='#25161a'; del.style.borderColor='#4a2a32'; del.style.color='#ff9aa9'; del.textContent='Delete';
+      del.onclick = ()=>{
+        const t0 = tableById(selectedId);
+        t0.entries = t0.entries.filter(x=>x.id!==en.id);
+        try{ localStorage.removeItem(`photo:entry:${en.id}`) }catch(e){}
+        $('#f-rem').value = remainingOf(t0);
+        save(); renderInvList(t0); updateMarkerSubtitle(t0.id);
+      };
+      act.appendChild(del);
+
+      row.appendChild(thumb); row.appendChild(meta); row.appendChild(act);
+      box.appendChild(row);
+    });
+  }
+  function updateMarkerSubtitle(id){
+    const t = tableById(id);
+    const node = layer.querySelector(`.table-marker[data-id="${id}"]`);
+    node?.querySelector('.marker-name')?.replaceChildren(document.createTextNode(topSubtitle(t)));
+  }
 
   function bindEditor(){
     $('#f-itemInput').addEventListener('keydown', (e)=>{
       if(e.key==='Enter' && e.target.value.trim()){
-        const t = current(); if(!t) return; t.items = t.items || []; t.items.push(e.target.value.trim()); e.target.value=''; renderItems(t.items); save();
+        const t = tableById(selectedId); if(!t) return;
+        t.tags = t.tags || []; t.tags.push(e.target.value.trim()); e.target.value='';
+        renderTags(t.tags); save(); updateMarkerSubtitle(t.id);
       }
     });
+
     $('#f-photo').addEventListener('change', async (e)=>{
       const file = e.target.files?.[0]; if(!file) return;
       try{
         const dataUrl = await compressImage(file, {maxW: 1280, maxH: 1280, quality: 0.82});
-        const t = current(); if(!t) return; t.photo = dataUrl; renderPhoto(t.photo); save();
-      }catch(err){ console.error(err); alert('Failed to load photo.'); }
+        const t = tableById(selectedId); if(!t) return; t.tablePhoto = dataUrl; renderTablePhoto(t.tablePhoto); save();
+      }catch(err){ console.error(err); alert('Failed to load table photo.'); }
     });
+
     $('#saveBtn').onclick = ()=>{
-      const t = current(); if(!t) return; t.name = $('#f-name').value.trim()||t.name; t.notes = $('#f-notes').value.trim();
-      const node = board.querySelector(`.table-marker[data-id="${t.id}"]`);
+      const t = tableById(selectedId); if(!t) return;
+      t.name   = $('#f-name').value.trim()||t.name;
+      t.notes  = $('#f-notes').value.trim();
+      t.capacity = Math.max(0, Number($('#f-cap').value||0));
+      $('#f-rem').value = remainingOf(t);
+
+      const node = layer.querySelector(`.table-marker[data-id="${t.id}"]`);
       node?.querySelector('.table-badge')?.replaceChildren(document.createTextNode(t.name||'T?'));
-      node?.querySelector('.marker-name')?.replaceChildren(document.createTextNode((t.items?.[0]||t.notes||'').slice(0,22)));
-      save();
-      flash(node);
+      updateMarkerSubtitle(t.id);
+      save(); flash(node);
     };
+
     $('#deleteBtn').onclick = ()=>{
-      const t = current(); if(!t) return; if(!confirm(`Delete ${t.name || 'this table'}?`)) return;
-      data.tables = data.tables.filter(x=>x.id!==t.id); try{ localStorage.removeItem(`photo:${t.id}`) }catch(e){}; save(); renderAll(); selectedId=null; if(isMobile()) openPanel(false);
+      const t = tableById(selectedId); if(!t) return; if(!confirm(`Delete ${t.name || 'this table'}?`)) return;
+      (t.entries||[]).forEach(en=>{ try{ localStorage.removeItem(`photo:entry:${en.id}`) }catch(e){} });
+      data.tables = data.tables.filter(x=>x.id!==t.id);
+      try{ localStorage.removeItem(`photo:table:${t.id}`) }catch(e){}
+      save(); renderAll(); selectedId=null; if(isMobile()) openPanel(false);
     };
-    $('#closeBtn').onclick = ()=>{ selectedId=null; $$('.table-marker').forEach(n=>n.classList.remove('selected')); if(isMobile()) openPanel(false); };
+
+    $('#closeBtn').onclick = ()=>{ selectedId=null; layer.querySelectorAll('.table-marker').forEach(n=>n.classList.remove('selected')); if(isMobile()) openPanel(false); };
+
+    // add item entry
+    let itemPhotoData = null;
+    $('#i-photo').addEventListener('change', async (e)=>{
+      const f = e.target.files?.[0]; if(!f) return;
+      try{
+        itemPhotoData = await compressImage(f, {maxW: 1280, maxH: 1280, quality: 0.82});
+        renderItemPhoto(itemPhotoData);
+      }catch(err){ console.error(err); alert('Failed to load item photo.'); }
+    });
+    $('#i-clear').onclick = ()=>{ itemPhotoData = null; renderItemPhoto(null); };
+
+    $('#i-add').onclick = ()=>{
+      const name = $('#i-name').value.trim();
+      const size = Number($('#i-size').value||0);
+      const note = $('#i-note').value.trim();
+      if(!name){ alert('Please enter item name'); return; }
+      if(size<0){ alert('Size must be ≥ 0'); return; }
+
+      const t = tableById(selectedId); if(!t) return;
+      const rem = remainingOf(t);
+      if(size > rem && !confirm(`Size ${size} exceeds remaining ${rem}. Add anyway?`)) return;
+
+      const entry = { id:eid(), name, size, note, photo:itemPhotoData||null, addedAt: Date.now() };
+      t.entries = t.entries || []; t.entries.unshift(entry);
+      $('#f-rem').value = remainingOf(t);
+
+      if(entry.photo){ try{ localStorage.setItem(`photo:entry:${entry.id}`, entry.photo); }catch(e){} }
+
+      $('#i-name').value=''; $('#i-size').value=''; $('#i-note').value=''; itemPhotoData=null; renderItemPhoto(null);
+
+      save(); renderInvList(t); updateMarkerSubtitle(t.id);
+    };
   }
 
   function flash(node){ if(!node) return; node.classList.add('pulse'); setTimeout(()=> node.classList.remove('pulse'), 600) }
 
-  // ----- toolbar & mobile panel -----
   function bindToolbar(){
     $('#addTableBtn').onclick = ()=>{
-      const id = uid(); const count = Math.floor(data.tables.length/2) + 1; // next number (approx)
-      const t = {id, name:`${count} Left`, x:Math.round(board.clientWidth/2-40+Math.random()*60), y:80+Math.round(Math.random()*40), notes:'', items:[], photo:null};
-      data.tables.push(t); save(); renderAll(); select(id); openEditor(id); if(isMobile()) openPanel(true);
+      const t = newTable(`Custom ${data.tables.length+1}`, Math.round(board.clientWidth/2-40+Math.random()*60), 80+Math.round(Math.random()*40));
+      data.tables.push(t); save(); renderAll(); select(t.id); openEditor(t.id); if(isMobile()) openPanel(true);
     };
+
+    $('#addPairBtn').onclick = ()=>{
+      const n = nextAvailableNumber();
+      if(n==null){ alert('All valid numbers (without 4/7) are already used.'); return; }
+      const baseX = Math.round(board.clientWidth/2 - 60);
+      const baseY = Math.round(80 + Math.random()*40);
+      const left  = newTable(`${n} Left`,  baseX-26, baseY);
+      const right = newTable(`${n} Right`, baseX+26, baseY);
+      data.tables.push(left,right); save(); renderAll(); select(left.id); openEditor(left.id); if(isMobile()) openPanel(true);
+    };
+
     $('#toggleEditBtn').onclick = ()=>{
       editMode = !editMode; $('#toggleEditBtn').textContent = `Layout Mode: ${editMode?'ON':'OFF'}`; $('#toggleEditBtn').classList.toggle('warn', !editMode);
       board.classList.toggle('editing', editMode);
     };
-    $('#exportBtn').onclick = ()=>{
-      const payload = JSON.stringify({tables: data.tables.map(t=> ({...t, photo: undefined}))}, null, 2);
-      const blob = new Blob([payload], {type:'application/json'});
-      const url = URL.createObjectURL(blob);
-      const a = Object.assign(document.createElement('a'), {href:url, download:'map-data.json'}); a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+    $('#snapBtn').onclick = ()=>{
+      snapOn = !snapOn; $('#snapBtn').textContent = `Snap: ${snapOn?'ON':'OFF'}`; $('#snapBtn').classList.toggle('ghost', !snapOn);
     };
-    $('#importFile').addEventListener('change', (e)=>{
-      const f = e.target.files?.[0]; if(!f) return; const r = new FileReader(); r.onload = ()=>{ try{ const parsed = JSON.parse(r.result);
-          if(!parsed || !Array.isArray(parsed.tables)) throw new Error('Invalid schema');
-          // migrate any photo fields to split storage
-          parsed.tables.forEach(t=>{ if(t.photo){ try{ localStorage.setItem(`photo:${t.id}`, t.photo); }catch(e){} } });
-          data = {tables: parsed.tables.map(t=> ({...t, photo: localStorage.getItem(`photo:${t.id}`) || null}))};
-          save(); renderAll(); alert('Import succeeded');
-        }catch{ alert('Import failed: invalid JSON') } };
-      r.readAsText(f);
-    });
-    $('#resetBtn').onclick = ()=>{ if(confirm('Reset all tables? This will remove current map data.')){ data = seed(); save(); renderAll(); }};
+
+    $('#resetBtn').onclick = ()=>{ if(confirm('Reset all tables? This will remove current map data.')){ data = seed(); save(); renderAll(); } };
+
     $('#bgFile').addEventListener('change', (e)=>{
       const f = e.target.files?.[0]; if(!f) return; const r = new FileReader(); r.onload = ()=>{ setBackground(r.result) }; r.readAsDataURL(f);
     });
 
-    const search = $('#search'); const list = $('#resultList');
-    function normalizeQuery(q){
-      q = (q||'').trim().toLowerCase();
-      const m = q.match(/^(\d{1,2})([lr])$/);
-      if(m){ const num = parseInt(m[1],10); const side = m[2]==='l'?' left':' right'; return `${num}${side}`; }
-      return q.replace(/\bleft\b/g,' left').replace(/\bright\b/g,' right');
-    }
-    function runSearch(q){
-      q = normalizeQuery(q);
-      list.innerHTML=''; $$('.table-marker').forEach(n=> n.classList.remove('pulse'));
-      if(!q){ return }
-      const matches = data.tables.filter(t=>
-        (t.name||'').toLowerCase().includes(q) ||
-        (t.notes||'').toLowerCase().includes(q) ||
-        (t.items||[]).some(it=> it.toLowerCase().includes(q))
-      );
+    const search = $('#search'), list = $('#resultList'), needSpace = $('#needSpace');
+    const runSearch = ()=>{
+      const q = (search.value||'').trim().toLowerCase();
+      const need = Number(needSpace.value||0);
+      list.innerHTML=''; layer.querySelectorAll('.table-marker').forEach(n=> n.classList.remove('pulse'));
+
+      const matches = data.tables.filter(t=>{
+        const textHit = !q || (t.name||'').toLowerCase().includes(q) || (t.notes||'').toLowerCase().includes(q)
+          || (t.tags||[]).some(k=> String(k).toLowerCase().includes(q))
+          || (t.entries||[]).some(en=> String(en.name||'').toLowerCase().includes(q) || String(en.note||'').toLowerCase().includes(q));
+        const spaceHit = isNaN(need) || need<=0 || remainingOf(t) >= need;
+        return textHit && spaceHit;
+      });
+
       matches.forEach(t=>{
         const row = document.createElement('div'); row.className='match';
-        const desc = escapeHTML((t.items||[]).join(', ')||t.notes||'');
-        row.innerHTML = `<div><b>${escapeHTML(t.name)}</b><div class="muted" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${desc}</div></div><button class="btn">Focus</button>`;
+        const desc = `${escapeHTML(topSubtitle(t))} · Rem ${remainingOf(t)}/${t.capacity||0}`;
+        row.innerHTML = `<div><b>${escapeHTML(t.name)}</b><div class="muted" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${desc}</div></div>
+                         <div style="display:flex;gap:.4rem"><button class="btn">Focus</button>
+                         ${(!isNaN(Number(need)) && Number(need)>0 && remainingOf(t)>=Number(need)) ? '<span class="tag">Fit</span>' : ''}</div>`;
         row.querySelector('button').onclick = ()=> focusTable(t.id);
         list.appendChild(row);
       });
-      matches.forEach(t=> flash(board.querySelector(`.table-marker[data-id="${t.id}"]`)) );
+      matches.forEach(t=> flash(layer.querySelector(`.table-marker[data-id="${t.id}"]`)) );
       if(matches.length===1) focusTable(matches[0].id);
       if(isMobile() && matches.length>0) openPanel(true);
-    }
-    search.addEventListener('keydown', (e)=>{ if(e.key==='Enter') runSearch(search.value) });
-    $('#clearSearch').onclick = ()=>{ search.value=''; list.innerHTML=''; $$('.table-marker').forEach(n=> n.classList.remove('pulse')) };
+    };
+    $('#runSearch').onclick = runSearch;
+    search.addEventListener('keydown', (e)=>{ if(e.key==='Enter') runSearch() });
+    needSpace.addEventListener('keydown', (e)=>{ if(e.key==='Enter') runSearch() });
+    $('#clearSearch').onclick = ()=>{ search.value=''; needSpace.value=''; list.innerHTML=''; layer.querySelectorAll('.table-marker').forEach(n=> n.classList.remove('pulse')) };
 
-    function focusTable(id){
-      const node = board.querySelector(`.table-marker[data-id="${id}"]`); if(!node) return;
-      const rect = node.getBoundingClientRect(); const parent = board.getBoundingClientRect();
-      board.scrollTo({ left: node.offsetLeft - parent.width/2 + rect.width/2, top: node.offsetTop - parent.height/2 + rect.height/2, behavior:'smooth' });
-      flash(node); select(id); openEditor(id);
-    }
+    function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+    $('#zoomInBtn').onclick  = ()=>{ zoom = clamp(zoom*1.1, 0.5, 3); applyZoom(); };
+    $('#zoomOutBtn').onclick = ()=>{ zoom = clamp(zoom/1.1, 0.5, 3); applyZoom(); };
+    board.addEventListener('wheel', (e)=>{
+      if(!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      const old = zoom;
+      zoom = clamp(zoom * (e.deltaY>0 ? 0.9 : 1.1), 0.5, 3);
+      applyZoom();
 
-    // Mobile bottom-sheet toggle
-    togglePanelBtn?.addEventListener('click', ()=> openPanel(!editor.classList.contains('open')));
+      const rect = board.getBoundingClientRect();
+      const cx = e.clientX - rect.left + board.scrollLeft;
+      const cy = e.clientY - rect.top  + board.scrollTop;
+      const ratio = zoom / old;
+      board.scrollTo({ left: cx*ratio - (e.clientX - rect.left), top: cy*ratio - (e.clientY - rect.top) });
+    }, {passive:false});
+  }
+
+  function applyZoom(){
+    layer.style.transform = `scale(${zoom})`;
+    $('#grid').style.transform = `scale(${zoom})`;
+    board.style.backgroundSize = `${100*zoom}% auto`;
+  }
+
+  function focusTable(id){
+    const node = layer.querySelector(`.table-marker[data-id="${id}"]`); if(!node) return;
+    const rect = node.getBoundingClientRect(); const parent = board.getBoundingClientRect();
+    board.scrollTo({ left: node.offsetLeft*zoom - parent.width/2 + rect.width/2, top: node.offsetTop*zoom - parent.height/2 + rect.height/2, behavior:'smooth' });
+    flash(node); select(id); openEditor(id);
   }
 
   function openPanel(show){
-    if(!isMobile()) return; // desktop keeps panel docked
+    if(!isMobile()) return;
     editor.classList.toggle('open', !!show);
     const expanded = !!show; if(togglePanelBtn){ togglePanelBtn.setAttribute('aria-expanded', String(expanded)); togglePanelBtn.textContent = expanded ? 'Hide' : 'Edit'; }
   }
 
-  function escapeHTML(s){return (s??'').replace(/[&<>"']/g, m=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]))}
+  function parseNumberAndSide(name){
+    const m = String(name||'').trim().match(/^(\d{1,2})\s+(left|right)$/i);
+    if(!m) return null;
+    return { num: parseInt(m[1],10), side: m[2].toLowerCase() };
+  }
+  function isValidNumber(n){ return n>=1 && n<=88 && !/[47]/.test(String(n).padStart(2,'0')); }
+  function usedSidesByNumber(){
+    const map = new Map();
+    for(const t of data.tables){
+      const p = parseNumberAndSide(t.name);
+      if(!p || !isValidNumber(p.num)) continue;
+      if(!map.has(p.num)) map.set(p.num, new Set());
+      map.get(p.num).add(p.side);
+    }
+    return map;
+  }
+  function nextAvailableNumber(){
+    const m = usedSidesByNumber();
+    for(let n=1;n<=88;n++){
+      if(!isValidNumber(n)) continue;
+      const sides = m.get(n);
+      if(!sides || sides.size<2) return n;
+    }
+    return null;
+  }
 
-  // Compress image to DataURL (JPEG) to avoid localStorage quota issues on mobile
   function compressImage(file, {maxW=1280, maxH=1280, quality=0.82}={}){
     return new Promise((resolve, reject)=>{
       const reader = new FileReader();
