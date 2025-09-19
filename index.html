@@ -17,7 +17,11 @@ header{position:sticky;top:0;z-index:5;background:rgba(13,17,23,.92);backdrop-fi
 .btn:hover{border-color:#3a4556}
 .btn.primary{background:linear-gradient(180deg,#2a5fff,#1b50e6);border-color:#2c57d0}
 .btn.ghost{background:transparent}
-input[type="text"],input[type="number"],textarea,select{background:#0f1318;border:1px solid #2a3240;color:var(--text);border-radius:.6rem;padding:.55rem .6rem;outline:none}
+
+/* inputs */
+input[type="text"],input[type="number"],textarea,select{
+  background:#0f1318;border:1px solid #2a3240;color:var(--text);border-radius:.6rem;padding:.55rem .6rem;outline:none;max-width:100%;
+}
 textarea{min-height:84px;resize:vertical}
 .muted{color:var(--muted)}
 
@@ -38,30 +42,33 @@ textarea{min-height:84px;resize:vertical}
 .expander{display:none;margin-top:10px;padding:12px;border:1px solid #243042;border-radius:10px;background:#0f1318}
 .table-row.open .expander{display:block}
 
-.field-2{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
-.field-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.6rem}
-.field{margin:.6rem 0}
-.actions{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+/* layout helpers */
+.field    { margin:.6rem 0 }
+.field-2  { display:grid; grid-template-columns:1fr 1fr; gap:.6rem }
+.field-3  { display:grid; grid-template-columns:1fr 1fr 1fr; gap:.6rem }
+.actions  { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap }
 
+/* photos */
 .photo{width:100%;aspect-ratio:4/3;background:#0f1318;border:1px dashed #344055;border-radius:12px;display:grid;place-items:center;overflow:hidden}
 .photo img{width:100%;height:100%;object-fit:cover}
 
+/* items */
 .inv{border-top:1px solid #202632;margin-top:8px;padding-top:8px;max-height:260px;overflow:auto}
 .inv-card{display:flex;gap:.6rem;align-items:center;border:1px solid #243042;border-radius:10px;padding:6px 8px;margin-bottom:8px}
 .tag{display:inline-block;background:#152032;border:1px solid #243042;padding:.1rem .4rem;border-radius:999px;font-weight:600}
 
+/* labels wall */
 .chips{display:flex;gap:.4rem;flex-wrap:wrap}
 .chip{border:1px solid #2a3240;background:#10151a;padding:.25rem .55rem;border-radius:999px}
-.chip b{font-weight:700}
-.chip .x{margin-left:.35rem;opacity:.7;font-weight:700;cursor:pointer}
-
 #labelsWall{margin:8px 0 12px}
 #labelsWall .title{font-size:12px;color:var(--muted);margin:0 0 6px 2px}
 #labelsWall .chips{min-height:36px;border:1px dashed #2a3240;border-radius:10px;padding:8px}
 
+/* responsive */
 @media (max-width: 900px){
   .table-row{min-height:68px}
   .row-head{grid-template-columns: minmax(100px,160px) 1fr max-content}
+  .field-2{ grid-template-columns:1fr; } /* stack on mobile */
 }
 </style>
 </head>
@@ -95,13 +102,11 @@ textarea{min-height:84px;resize:vertical}
 <script>
 (function(){
   var $ = function(s){ return document.querySelector(s); };
-  var $$ = function(s){ return Array.prototype.slice.call(document.querySelectorAll(s)); };
   var list = $('#tableList');
   var labelsBox = $('#labelsBox');
-  var stateKey='bar.inv.photo.one.en.v1';
+  var stateKey='bar.inv.photo.one.en.v2';
 
   var data = load() || seed();
-  // hard guard
   if(!data || !Array.isArray(data.tables)){ data = seed(); try{ localStorage.setItem(stateKey, JSON.stringify(data)); }catch(e){} }
   var openId = null;
   var labelFilter = '';
@@ -110,60 +115,41 @@ textarea{min-height:84px;resize:vertical}
   renderList();
   bindToolbar();
 
-  // ======= model =======
+  // ===== model =====
   function uid(){ return 't'+Math.random().toString(36).slice(2,9); }
   function eid(){ return 'e'+Math.random().toString(36).slice(2,9); }
   function newTable(name){ return {id:uid(), name:name, notes:'', tags:[], capacity:100, entries:[], compartmentPhoto:null}; }
   function remainingOf(t){
-    var ents = Array.isArray(t.entries) ? t.entries : [];
+    var ents = Array.isArray(t.entries)?t.entries:[];
     var used = ents.reduce(function(s,e){ return s + Number(e.size||0); }, 0);
     return Math.max(0, Number(t.capacity||0) - used);
   }
-
   function seed(){
-    var tables = [];
-    var isValid = function(n){ return !/[47]/.test(String(n).padStart(2,'0')); };
-    for(var n=1;n<=88;n++){
-      if(!isValid(n)) continue;
-      tables.push(newTable(n+' Left'));
-      tables.push(newTable(n+' Right'));
-    }
+    var tables=[], isValid=function(n){ return !/[47]/.test(String(n).padStart(2,'0')); };
+    for(var n=1;n<=88;n++){ if(!isValid(n)) continue; tables.push(newTable(n+' Left')); tables.push(newTable(n+' Right')); }
     return {tables:tables};
   }
-
   function save(){
     try{
-      var slim = {
-        tables: (Array.isArray(data.tables)?data.tables:[]).map(function(t){
-          if(t.compartmentPhoto){
-            try{ localStorage.setItem('photo:comp:'+t.id, t.compartmentPhoto); }catch(e){}
-          }
-          var copy = {
-            id:t.id, name:t.name, notes:t.notes, tags:Array.isArray(t.tags)?t.tags:[],
-            capacity:Number(t.capacity||0),
-            entries:Array.isArray(t.entries)?t.entries:[]
-          };
-          return copy;
-        })
-      };
+      var slim={tables:(Array.isArray(data.tables)?data.tables:[]).map(function(t){
+        if(t.compartmentPhoto){ try{ localStorage.setItem('photo:comp:'+t.id, t.compartmentPhoto);}catch(e){} }
+        return {
+          id:t.id, name:t.name, notes:t.notes||'', tags:Array.isArray(t.tags)?t.tags:[],
+          capacity:Number(t.capacity||0), entries:Array.isArray(t.entries)?t.entries:[]
+        };
+      })};
       localStorage.setItem(stateKey, JSON.stringify(slim));
       return true;
-    }catch(e){
-      alert('Save failed: storage blocked or full.');
-      return false;
-    }
+    }catch(e){ alert('Save failed: storage blocked or full.'); return false; }
   }
   function load(){
     try{
-      var raw = localStorage.getItem(stateKey);
-      if(!raw) return null;
-      var slim = JSON.parse(raw);
-      if(!slim || !Array.isArray(slim.tables)) return null;
-      var tables = slim.tables.map(function(t){
+      var raw=localStorage.getItem(stateKey); if(!raw) return null;
+      var slim=JSON.parse(raw); if(!slim || !Array.isArray(slim.tables)) return null;
+      var tables=slim.tables.map(function(t){
         return {
           id:t.id, name:t.name, notes:t.notes||'', tags:Array.isArray(t.tags)?t.tags:[],
-          capacity:Number(t.capacity||0),
-          entries:Array.isArray(t.entries)?t.entries:[],
+          capacity:Number(t.capacity||0), entries:Array.isArray(t.entries)?t.entries:[],
           compartmentPhoto: localStorage.getItem('photo:comp:'+t.id) || null
         };
       });
@@ -171,7 +157,7 @@ textarea{min-height:84px;resize:vertical}
     }catch(e){ return null; }
   }
 
-  // ======= labels wall =======
+  // ===== labels wall =====
   function computeNameCounts(){
     var map = new Map();
     (data.tables||[]).forEach(function(t){
@@ -187,22 +173,17 @@ textarea{min-height:84px;resize:vertical}
     labelsBox.innerHTML='';
     var map=computeNameCounts();
     if(map.size===0){ labelsBox.innerHTML='<span class="muted">No labels yet</span>'; return; }
-    var arr = Array.from(map.entries()).sort(function(a,b){
-      return b[1]-a[1] || a[0].localeCompare(b[0]);
-    });
-    var frag=document.createDocumentFragment();
-    arr.forEach(function(pair){
-      var name=pair[0], count=pair[1];
-      var chip=document.createElement('span');
-      chip.className='chip';
-      chip.innerHTML = '<b>'+escapeHtml(name)+'</b> <span class="muted">×'+count+'</span>';
-      chip.onclick = function(){ labelFilter = name.toLowerCase(); $('#q').value = name; runSearch(); };
-      frag.appendChild(chip);
-    });
-    labelsBox.appendChild(frag);
+    Array.from(map.entries()).sort(function(a,b){ return b[1]-a[1] || a[0].localeCompare(b[0]); })
+      .forEach(function(pair){
+        var name=pair[0], count=pair[1];
+        var chip=document.createElement('span'); chip.className='chip';
+        chip.innerHTML = '<b>'+escapeHtml(name)+'</b> <span class="muted">×'+count+'</span>';
+        chip.onclick = function(){ labelFilter=name.toLowerCase(); document.getElementById('q').value=name; runSearch(); };
+        labelsBox.appendChild(chip);
+      });
   }
 
-  // ======= list =======
+  // ===== list =====
   function renderList(items){
     try{
       items = items || (Array.isArray(data.tables)?data.tables:[]);
@@ -211,14 +192,13 @@ textarea{min-height:84px;resize:vertical}
 
       list.innerHTML='';
       if(items.length===0){
-        list.innerHTML = '<div class="table-row"><span class="muted" style="padding:10px 12px">No tables</span></div>';
+        list.innerHTML='<div class="table-row"><span class="muted" style="padding:10px 12px">No tables</span></div>';
         return;
       }
 
       items.forEach(function(t){
         var rem=remainingOf(t), cap=Number(t.capacity||0), pct=cap>0?(rem/cap)*100:0;
-        var row=document.createElement('div');
-        row.className='table-row';
+        var row=document.createElement('div'); row.className='table-row';
         if(t.id===openId) row.classList.add('open');
         row.innerHTML =
           '<div class="row-head">'+
@@ -230,14 +210,12 @@ textarea{min-height:84px;resize:vertical}
             '<div class="stat">'+rem+'/'+cap+'</div>'+
           '</div>'+
           '<div class="expander"></div>';
-
         row.querySelector('.row-head').onclick=function(){
           if(openId===t.id){ openId=null; renderList(); return; }
           openId=t.id; renderList();
         };
-
         list.appendChild(row);
-        if(t.id===openId){ renderRowEditor(t, row.querySelector('.expander')); }
+        if(t.id===openId) renderRowEditor(t, row.querySelector('.expander'));
       });
     }catch(e){
       console.error('renderList error:', e);
@@ -245,7 +223,7 @@ textarea{min-height:84px;resize:vertical}
     }
   }
 
-  // ======= inline editor =======
+  // ===== inline editor =====
   function renderRowEditor(t,box){
     var rem=remainingOf(t), cap=Number(t.capacity||0);
     box.innerHTML =
@@ -259,7 +237,7 @@ textarea{min-height:84px;resize:vertical}
       '</div>'+
       '<div class="field"><label>Notes<textarea class="in-notes" placeholder="e.g., upper shelf / power / locked">'+escapeHtml(t.notes||'')+'</textarea></label></div>'+
 
-      '<div class="field"><strong>Current compartment photo (will be updated when adding items)</strong></div>'+
+      '<div class="field"><strong>Current compartment photo (updated when adding items)</strong></div>'+
       '<div class="photo comp-ph">'+(t.compartmentPhoto?('<img src="'+t.compartmentPhoto+'">'):'<span class="muted">No photo</span>')+'</div>'+
       '<div class="actions" style="margin-top:6px">'+
         '<label class="btn ghost">Retake<input class="comp-photo" type="file" accept="image/*" capture="environment" hidden></label>'+
@@ -268,15 +246,19 @@ textarea{min-height:84px;resize:vertical}
 
       '<hr>'+
       '<strong>Add Item (photo required)</strong>'+
-      '<div class="field-3">'+
+      '<div class="field-2">'+
         '<label>Item name<input class="i-name" type="text" placeholder="Camera / Cake / Thermos"></label>'+
         '<label>Size<input class="i-size" type="number" min="0" step="1" placeholder="10"></label>'+
-        '<label>From<select class="i-role">'+
-          '<option value="bar">bar</option>'+
-          '<option value="host">host</option>'+
-          '<option value="server">server</option>'+
-          '<option value="other" selected>other</option>'+
-        '</select></label>'+
+      '</div>'+
+      '<div class="field">'+
+        '<label>From '+
+          '<select class="i-role" style="width:100%">'+
+            '<option value="bar">bar</option>'+
+            '<option value="host">host</option>'+
+            '<option value="server">server</option>'+
+            '<option value="other" selected>other</option>'+
+          '</select>'+
+        '</label>'+
       '</div>'+
       '<div class="field"><label>Note (optional)<input class="i-note" type="text" placeholder="Top-left / In box"></label></div>'+
       '<div class="photo i-ph"><span class="muted">Please take a photo (required)</span></div>'+
@@ -292,15 +274,15 @@ textarea{min-height:84px;resize:vertical}
 
       '<div class="actions" style="margin-top:10px">'+
         '<button class="btn primary btn-save">Save Table</button>'+
-        '<button class="btn" style="background:#25161a;border-color:#4a2a32;color:#ff9aa9">Delete Table</button>'+
+        '<button class="btn btn-del-table" style="background:#25161a;border-color:#4a2a32;color:#ff9aa9">Delete Table</button>'+
       '</div>';
 
-    // fields
+    // table fields
     box.querySelector('.in-name').onchange=function(e){ t.name=e.target.value.trim(); save(); renderList(); };
     box.querySelector('.in-cap').onchange=function(e){ t.capacity=Number(e.target.value)||0; box.querySelector('.in-rem').value=remainingOf(t); save(); renderList(); };
     box.querySelector('.in-notes').onchange=function(e){ t.notes=e.target.value; save(); renderList(); };
 
-    // compartment photo (single, no history)
+    // compartment photo
     var compInput = box.querySelector('.comp-photo');
     if(compInput){
       compInput.addEventListener('change', function(ev){
@@ -314,25 +296,22 @@ textarea{min-height:84px;resize:vertical}
     }
     var compClear = box.querySelector('.comp-clear');
     if(compClear){
-      compClear.onclick = function(){
-        t.compartmentPhoto = null;
-        try{ localStorage.removeItem('photo:comp:'+t.id); }catch(e){}
+      compClear.onclick=function(){
+        t.compartmentPhoto=null; try{ localStorage.removeItem('photo:comp:'+t.id); }catch(e){}
         save(); renderRowEditor(t,box); renderList();
       };
     }
 
     // add item (photo required)
-    var itemPhoto = null;
-    var iph = box.querySelector('.i-ph');
+    var itemPhoto=null;
+    var iph=box.querySelector('.i-ph');
     box.querySelector('.i-photo').addEventListener('change', function(ev){
-      var f = ev.target.files && ev.target.files[0]; if(!f) return;
-      compressImage(f).then(function(dt){
-        itemPhoto = dt; iph.innerHTML = '<img src="'+dt+'">';
-      }).catch(function(){});
+      var f=ev.target.files && ev.target.files[0]; if(!f) return;
+      compressImage(f).then(function(dt){ itemPhoto=dt; iph.innerHTML='<img src="'+dt+'">'; }).catch(function(){});
     });
-    box.querySelector('.i-clear').onclick = function(){ itemPhoto=null; iph.innerHTML='<span class="muted">Please take a photo (required)</span>'; };
+    box.querySelector('.i-clear').onclick=function(){ itemPhoto=null; iph.innerHTML='<span class="muted">Please take a photo (required)</span>'; };
 
-    box.querySelector('.i-add').onclick = function(){
+    box.querySelector('.i-add').onclick=function(){
       var name = box.querySelector('.i-name').value.trim();
       var size = Number(box.querySelector('.i-size').value||0);
       var role = box.querySelector('.i-role').value;
@@ -341,40 +320,40 @@ textarea{min-height:84px;resize:vertical}
       if(size<0){ alert('Size must be ≥ 0'); return; }
       if(!itemPhoto){ alert('Photo is required'); return; }
 
-      // set this as the current compartment photo
+      // update current compartment photo
       t.compartmentPhoto = itemPhoto;
       try{ localStorage.setItem('photo:comp:'+t.id, itemPhoto); }catch(e){}
 
-      // add entry
       if(!Array.isArray(t.entries)) t.entries=[];
       t.entries.unshift({id:eid(), name:name, size:size, note:note, role:role, addedAt:Date.now()});
 
       // clear form
-      box.querySelector('.i-name').value='';
-      box.querySelector('.i-size').value='';
-      box.querySelector('.i-note').value='';
+      box.querySelector('.i-name').value=''; box.querySelector('.i-size').value=''; box.querySelector('.i-note').value='';
       itemPhoto=null; iph.innerHTML='<span class="muted">Please take a photo (required)</span>';
 
-      // update UI
-      var remInput = box.querySelector('.in-rem'); if(remInput) remInput.value = remainingOf(t);
+      // update ui
+      var remInput=box.querySelector('.in-rem'); if(remInput) remInput.value=remainingOf(t);
       save(); renderInvList(t, box.querySelector('.i-list')); renderLabelsWall(); renderList();
     };
 
     renderInvList(t, box.querySelector('.i-list'));
 
-    // save/delete
-    box.querySelector('.btn-save').onclick = function(){ save(); renderList(); };
-    box.querySelector('.actions .btn:last-child').onclick = function(){
-      if(!confirm('Delete '+(t.name||'this table')+'?')) return;
-      try{ localStorage.removeItem('photo:comp:'+t.id); }catch(e){}
-      data.tables = (data.tables||[]).filter(function(x){ return x.id!==t.id; });
-      openId=null; save(); renderLabelsWall(); renderList();
-    };
+    // save / delete
+    box.querySelector('.btn-save').onclick=function(){ save(); renderList(); };
+    var delBtn = box.querySelector('.btn-del-table');
+    if(delBtn){
+      delBtn.onclick=function(){
+        if(!confirm('Delete '+(t.name||'this table')+'?')) return;
+        try{ localStorage.removeItem('photo:comp:'+t.id); }catch(e){}
+        data.tables=(data.tables||[]).filter(function(x){ return x.id!==t.id; });
+        openId=null; save(); renderLabelsWall(); renderList();
+      };
+    }
   }
 
   function renderInvList(t, container){
     container.innerHTML='';
-    var arr = Array.isArray(t.entries)?t.entries:[];
+    var arr=Array.isArray(t.entries)?t.entries:[];
     if(arr.length===0){ container.textContent='None'; container.classList.add('muted'); return; }
     container.classList.remove('muted');
     arr.forEach(function(en){
@@ -387,40 +366,37 @@ textarea{min-height:84px;resize:vertical}
         '</div>'+
         '<div class="sp"></div>'+
         '<button class="btn btn-del" style="background:#25161a;border-color:#4a2a32;color:#ff9aa9">Delete</button>';
-      row.querySelector('.btn-del').onclick = function(){
-        t.entries = (t.entries||[]).filter(function(x){ return x.id!==en.id; });
+      row.querySelector('.btn-del').onclick=function(){
+        t.entries=(t.entries||[]).filter(function(x){ return x.id!==en.id; });
         save(); renderInvList(t, container); renderLabelsWall();
         var ex = container.closest ? container.closest('.expander') : container.parentNode;
-        if(ex){ var remInput = ex.querySelector('.in-rem'); if(remInput) remInput.value = remainingOf(t); }
+        if(ex){ var remInput=ex.querySelector('.in-rem'); if(remInput) remInput.value=remainingOf(t); }
         renderList();
       };
       container.appendChild(row);
     });
   }
 
-  // ======= toolbar =======
+  // ===== toolbar =====
   function bindToolbar(){
-    $('#addTable').onclick = function(){
-      var t = newTable('Custom '+(((data.tables||[]).length)+1));
-      data.tables.unshift(t); openId=t.id; save(); renderLabelsWall(); renderList();
+    document.getElementById('addTable').onclick=function(){
+      var t=newTable('Custom '+(((data.tables||[]).length)+1)); data.tables.unshift(t); openId=t.id; save(); renderLabelsWall(); renderList();
     };
-    $('#addPair').onclick = function(){
-      var n = nextAvailableNumber();
-      if(n==null){ alert('No valid numbers left (4/7 excluded)'); return; }
-      var left=newTable(n+' Left'), right=newTable(n+' Right');
-      data.tables.unshift(right); data.tables.unshift(left);
+    document.getElementById('addPair').onclick=function(){
+      var n=nextAvailableNumber(); if(n==null){ alert('No valid numbers left (4/7 excluded)'); return; }
+      var left=newTable(n+' Left'), right=newTable(n+' Right'); data.tables.unshift(right); data.tables.unshift(left);
       openId=left.id; save(); renderList();
     };
-    $('#find').onclick = runSearch;
-    $('#q').onkeydown = function(e){ if(e.key==='Enter') runSearch(); };
-    $('#need').onkeydown = function(e){ if(e.key==='Enter') runSearch(); };
-    $('#clear').onclick = function(){ $('#q').value=''; $('#need').value=''; labelFilter=''; openId=null; renderList(); };
-    $('#reset').onclick = doReset;
+    document.getElementById('find').onclick=runSearch;
+    document.getElementById('q').onkeydown=function(e){ if(e.key==='Enter') runSearch(); };
+    document.getElementById('need').onkeydown=function(e){ if(e.key==='Enter') runSearch(); };
+    document.getElementById('clear').onclick=function(){ document.getElementById('q').value=''; document.getElementById('need').value=''; labelFilter=''; openId=null; renderList(); };
+    document.getElementById('reset').onclick=doReset;
   }
   function runSearch(){
-    var kw = $('#q').value.trim().toLowerCase();
-    var req = Number($('#need').value)||0;
-    var out = (data.tables||[]).filter(function(t){
+    var kw = document.getElementById('q').value.trim().toLowerCase();
+    var req = Number(document.getElementById('need').value)||0;
+    var out=(data.tables||[]).filter(function(t){
       var textHit = !kw ||
         String(t.name||'').toLowerCase().includes(kw) ||
         String(t.notes||'').toLowerCase().includes(kw) ||
@@ -437,40 +413,35 @@ textarea{min-height:84px;resize:vertical}
   function doReset(){
     if(!confirm('Reset will clear local data and rebuild default tables. Continue?')) return;
     try{
-      var raw = localStorage.getItem(stateKey);
+      var raw=localStorage.getItem(stateKey);
       if(raw){
-        var parsed = JSON.parse(raw);
+        var parsed=JSON.parse(raw);
         if(parsed && Array.isArray(parsed.tables)){
           parsed.tables.forEach(function(t){ localStorage.removeItem('photo:comp:'+t.id); });
         }
       }
     }catch(e){}
     localStorage.removeItem(stateKey);
-    data = seed();
-    openId=null;
+    data=seed(); openId=null;
     try{ localStorage.setItem(stateKey, JSON.stringify(data)); }catch(e){}
-    renderLabelsWall();
-    renderList();
-    alert('Reset done.');
+    renderLabelsWall(); renderList(); alert('Reset done.');
   }
 
-  // ======= utils =======
-  function escapeHtml(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  // ===== utils =====
+  function escapeHtml(s){ return (s==null?'':String(s)).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]);}); }
   function escapeAttr(s){ return escapeHtml(s).replace(/"/g,'&quot;'); }
-  function compressImage(file, opts){
-    opts = opts || {};
-    var maxW = opts.maxW || 1280, maxH = opts.maxH || 1280, q = ('quality' in opts)?opts.quality:0.82;
+  function compressImage(file,opts){
+    opts=opts||{}; var maxW=opts.maxW||1280, maxH=opts.maxH||1280, q=('quality' in opts)?opts.quality:0.82;
     return new Promise(function(resolve,reject){
       var r=new FileReader();
       r.onload=function(){
         var img=new Image();
         img.onload=function(){
           var w=img.naturalWidth||img.width, h=img.naturalHeight||img.height;
-          var ratio=Math.min(1, maxW/w, maxH/h);
-          var cw=Math.max(1,Math.round(w*ratio)), ch=Math.max(1,Math.round(h*ratio));
+          var ratio=Math.min(1,maxW/w,maxH/h), cw=Math.max(1,Math.round(w*ratio)), ch=Math.max(1,Math.round(h*ratio));
           var c=document.createElement('canvas'); c.width=cw; c.height=ch;
           var ctx=c.getContext('2d'); ctx.drawImage(img,0,0,cw,ch);
-          try{ resolve(c.toDataURL('image/jpeg', q)); }catch(e){ reject(e); }
+          try{ resolve(c.toDataURL('image/jpeg',q)); }catch(e){ reject(e); }
         };
         img.onerror=reject; img.src=r.result;
       };
@@ -478,23 +449,17 @@ textarea{min-height:84px;resize:vertical}
     });
   }
   function parseNumberAndSide(name){
-    var m = String(name||'').match(/^(\d{1,2})\s+(left|right)$/i);
-    return m ? {num:+m[1], side:m[2].toLowerCase()} : null;
+    var m=String(name||'').match(/^(\d{1,2})\s+(left|right)$/i);
+    return m?{num:+m[1],side:m[2].toLowerCase()}:null;
   }
   function isValidNumber(n){ return n>=1 && n<=88 && !/[47]/.test(String(n).padStart(2,'0')); }
   function nextAvailableNumber(){
     var used=new Map();
     (data.tables||[]).forEach(function(t){
-      var p=parseNumberAndSide(t.name);
-      if(!p || !isValidNumber(p.num)) return;
-      if(!used.has(p.num)) used.set(p.num,new Set());
-      used.get(p.num).add(p.side);
+      var p=parseNumberAndSide(t.name); if(!p || !isValidNumber(p.num)) return;
+      if(!used.has(p.num)) used.set(p.num,new Set()); used.get(p.num).add(p.side);
     });
-    for(var n=1;n<=88;n++){
-      if(!isValidNumber(n)) continue;
-      var s=used.get(n);
-      if(!s || s.size<2) return n;
-    }
+    for(var n=1;n<=88;n++){ if(!isValidNumber(n)) continue; var s=used.get(n); if(!s || s.size<2) return n; }
     return null;
   }
 })();
