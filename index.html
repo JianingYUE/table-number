@@ -1,13 +1,13 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>库存 – 条形视图（拍照版）</title>
+<title>Inventory – Bar View (Photo Required)</title>
 <style>
 :root{
   --bg:#0b0d10; --card:#12161b; --muted:#8892a6; --text:#e6edf3; --accent:#6aa6ff;
-  --bar-bg:#1a2230; --bar-rem:#38d39f; --bar-used:#2a3344;
+  --bar-bg:#1a2230; --bar-rem:#38d39f;
 }
 *{box-sizing:border-box}
 body{margin:0;background:linear-gradient(180deg,#0a0c10,#0d1117);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
@@ -57,7 +57,7 @@ textarea{min-height:84px;resize:vertical}
 
 #labelsWall{margin:8px 0 12px}
 #labelsWall .title{font-size:12px;color:var(--muted);margin:0 0 6px 2px}
-#labelsWall .chips{max-height:92px;overflow:auto;border:1px dashed #2a3240;border-radius:10px;padding:8px}
+#labelsWall .chips{min-height:36px;border:1px dashed #2a3240;border-radius:10px;padding:8px}
 
 @media (max-width: 900px){
   .table-row{min-height:68px}
@@ -68,22 +68,22 @@ textarea{min-height:84px;resize:vertical}
 <body>
 <header>
   <div class="toolbar">
-    <button id="addTable" class="btn">新增桌子</button>
-    <button id="addPair" class="btn">新增一对（Left/Right）</button>
-    <input id="q" type="text" placeholder="搜索 物品/桌名/备注/标签…" />
-    <input id="need" type="number" min="0" step="1" style="width:120px" placeholder="需要空间" />
-    <button id="find" class="btn ghost">搜索</button>
-    <button id="clear" class="btn ghost">清空</button>
-    <button id="reset" class="btn ghost">重置</button>
+    <button id="addTable" class="btn">Add Table</button>
+    <button id="addPair" class="btn">Add Pair (Left/Right)</button>
+    <input id="q" type="text" placeholder="Search item / table / note / tag…" />
+    <input id="need" type="number" min="0" step="1" style="width:120px" placeholder="Required space" />
+    <button id="find" class="btn ghost">Find</button>
+    <button id="clear" class="btn ghost">Clear</button>
+    <button id="reset" class="btn ghost">Reset</button>
   </div>
 </header>
 
 <main class="wrap">
   <div class="muted" style="margin:4px 2px 6px">Green = remaining space</div>
 
-  <!-- 物品名标签墙（自动增删） -->
+  <!-- Auto labels from item names -->
   <section id="labelsWall">
-    <div class="title">物品标签（自动）：点击可快速筛选</div>
+    <div class="title">Auto labels (from item names). Tap to filter:</div>
     <div id="labelsBox" class="chips"></div>
   </section>
 
@@ -94,324 +94,407 @@ textarea{min-height:84px;resize:vertical}
 
 <script>
 (function(){
-  const $ = s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
-  const list = $('#tableList');
-  const labelsBox = $('#labelsBox');
-  const stateKey='bar.inv.photo.one.v1';
+  var $ = function(s){ return document.querySelector(s); };
+  var $$ = function(s){ return Array.prototype.slice.call(document.querySelectorAll(s)); };
+  var list = $('#tableList');
+  var labelsBox = $('#labelsBox');
+  var stateKey='bar.inv.photo.one.en.v1';
 
-  let data = load() || seed();
-  // 启动兜底：确保有 tables 数组
-  if (!data || !Array.isArray(data.tables)) { data = seed(); try{ localStorage.setItem(stateKey, JSON.stringify(data)); }catch{} }
-  let openId = null;
-  let labelFilter = ''; // 点击标签后的筛选
+  var data = load() || seed();
+  // hard guard
+  if(!data || !Array.isArray(data.tables)){ data = seed(); try{ localStorage.setItem(stateKey, JSON.stringify(data)); }catch(e){} }
+  var openId = null;
+  var labelFilter = '';
 
   renderLabelsWall();
   renderList();
   bindToolbar();
 
-  // ======= 数据模型 =======
-  function uid(){ return 't'+Math.random().toString(36).slice(2,9) }
-  function eid(){ return 'e'+Math.random().toString(36).slice(2,9) }
-  function newTable(name){ return {id:uid(), name, notes:'', tags:[], capacity:100, entries:[], compartmentPhoto:null}; }
-  function remainingOf(t){ const used=(Array.isArray(t.entries)?t.entries:[]).reduce((s,e)=>s+Number(e.size||0),0); return Math.max(0, Number(t.capacity||0)-used); }
+  // ======= model =======
+  function uid(){ return 't'+Math.random().toString(36).slice(2,9); }
+  function eid(){ return 'e'+Math.random().toString(36).slice(2,9); }
+  function newTable(name){ return {id:uid(), name:name, notes:'', tags:[], capacity:100, entries:[], compartmentPhoto:null}; }
+  function remainingOf(t){
+    var ents = Array.isArray(t.entries) ? t.entries : [];
+    var used = ents.reduce(function(s,e){ return s + Number(e.size||0); }, 0);
+    return Math.max(0, Number(t.capacity||0) - used);
+  }
 
   function seed(){
-    const tables=[]; const isValid=n=>!/[47]/.test(String(n).padStart(2,'0'));
-    for(let n=1;n<=88;n++){ if(!isValid(n)) continue; tables.push(newTable(`${n} Left`)); tables.push(newTable(`${n} Right`)); }
-    return {tables};
+    var tables = [];
+    var isValid = function(n){ return !/[47]/.test(String(n).padStart(2,'0')); };
+    for(var n=1;n<=88;n++){
+      if(!isValid(n)) continue;
+      tables.push(newTable(n+' Left'));
+      tables.push(newTable(n+' Right'));
+    }
+    return {tables:tables};
   }
 
   function save(){
     try{
-      const slim={tables:(Array.isArray(data.tables)?data.tables:[]).map(t=>{
-        if(t.compartmentPhoto){ try{ localStorage.setItem('photo:comp:'+t.id, t.compartmentPhoto);}catch(e){} }
-        const {compartmentPhoto, ...rest}=t;
-        return {...rest, entries:Array.isArray(t.entries)?t.entries:[]};
-      })};
+      var slim = {
+        tables: (Array.isArray(data.tables)?data.tables:[]).map(function(t){
+          if(t.compartmentPhoto){
+            try{ localStorage.setItem('photo:comp:'+t.id, t.compartmentPhoto); }catch(e){}
+          }
+          var copy = {
+            id:t.id, name:t.name, notes:t.notes, tags:Array.isArray(t.tags)?t.tags:[],
+            capacity:Number(t.capacity||0),
+            entries:Array.isArray(t.entries)?t.entries:[]
+          };
+          return copy;
+        })
+      };
       localStorage.setItem(stateKey, JSON.stringify(slim));
       return true;
-    }catch(e){ alert('保存失败：本地存储空间不足或被阻止'); return false; }
+    }catch(e){
+      alert('Save failed: storage blocked or full.');
+      return false;
+    }
   }
   function load(){
     try{
-      const raw=localStorage.getItem(stateKey); if(!raw) return null;
-      const slim=JSON.parse(raw);
+      var raw = localStorage.getItem(stateKey);
+      if(!raw) return null;
+      var slim = JSON.parse(raw);
       if(!slim || !Array.isArray(slim.tables)) return null;
-      const tables=slim.tables.map(t=>({
-        ...t,
-        entries:Array.isArray(t.entries)?t.entries:[],
-        compartmentPhoto:localStorage.getItem('photo:comp:'+t.id)||null
-      }));
-      return {tables};
-    }catch{ return null }
+      var tables = slim.tables.map(function(t){
+        return {
+          id:t.id, name:t.name, notes:t.notes||'', tags:Array.isArray(t.tags)?t.tags:[],
+          capacity:Number(t.capacity||0),
+          entries:Array.isArray(t.entries)?t.entries:[],
+          compartmentPhoto: localStorage.getItem('photo:comp:'+t.id) || null
+        };
+      });
+      return {tables:tables};
+    }catch(e){ return null; }
   }
 
-  // ======= 标签墙（按物品名汇总） =======
+  // ======= labels wall =======
   function computeNameCounts(){
-    const map = new Map();
-    for(const t of (data.tables||[])){
-      for(const en of (t.entries||[])){
-        const key=(en.name||'').trim();
-        if(!key) continue;
-        map.set(key,(map.get(key)||0)+1);
-      }
-    }
+    var map = new Map();
+    (data.tables||[]).forEach(function(t){
+      (t.entries||[]).forEach(function(en){
+        var key = String(en.name||'').trim();
+        if(!key) return;
+        map.set(key, (map.get(key)||0)+1);
+      });
+    });
     return map;
   }
   function renderLabelsWall(){
     labelsBox.innerHTML='';
-    const map=computeNameCounts();
-    if(map.size===0){ labelsBox.innerHTML='<span class="muted">暂无标签</span>'; return; }
-    const frag=document.createDocumentFragment();
-    [...map.entries()].sort((a,b)=> b[1]-a[1] || a[0].localeCompare(b[0])).forEach(([name,count])=>{
-      const chip=document.createElement('span'); chip.className='chip';
-      chip.innerHTML = `<b>${escapeHtml(name)}</b> <span class="muted">×${count}</span>`;
-      chip.onclick = ()=>{ labelFilter = name.toLowerCase(); $('#q').value = name; runSearch(); };
+    var map=computeNameCounts();
+    if(map.size===0){ labelsBox.innerHTML='<span class="muted">No labels yet</span>'; return; }
+    var arr = Array.from(map.entries()).sort(function(a,b){
+      return b[1]-a[1] || a[0].localeCompare(b[0]);
+    });
+    var frag=document.createDocumentFragment();
+    arr.forEach(function(pair){
+      var name=pair[0], count=pair[1];
+      var chip=document.createElement('span');
+      chip.className='chip';
+      chip.innerHTML = '<b>'+escapeHtml(name)+'</b> <span class="muted">×'+count+'</span>';
+      chip.onclick = function(){ labelFilter = name.toLowerCase(); $('#q').value = name; runSearch(); };
       frag.appendChild(chip);
     });
     labelsBox.appendChild(frag);
   }
 
-  // ======= 列表（默认按剩余降序） =======
-  function renderList(items = (data && Array.isArray(data.tables) ? data.tables : [])){
+  // ======= list =======
+  function renderList(items){
     try{
-      items = Array.isArray(items) ? items : [];
-      items = [...items].sort((a,b)=> remainingOf(b) - remainingOf(a));
+      items = items || (Array.isArray(data.tables)?data.tables:[]);
+      items = Array.isArray(items)?items:[];
+      items = items.slice().sort(function(a,b){ return remainingOf(b)-remainingOf(a); });
+
       list.innerHTML='';
       if(items.length===0){
-        list.innerHTML='<div class="table-row"><span class="muted" style="padding:10px 12px">没有桌子</span></div>';
+        list.innerHTML = '<div class="table-row"><span class="muted" style="padding:10px 12px">No tables</span></div>';
         return;
       }
 
-      items.forEach(t=>{
-        const rem=remainingOf(t), cap=Number(t.capacity||0), pct=cap>0?(rem/cap)*100:0;
-        const row=document.createElement('div');
+      items.forEach(function(t){
+        var rem=remainingOf(t), cap=Number(t.capacity||0), pct=cap>0?(rem/cap)*100:0;
+        var row=document.createElement('div');
         row.className='table-row';
         if(t.id===openId) row.classList.add('open');
-        row.innerHTML=`
-          <div class="row-head">
-            <div class="meta">
-              <span class="badge">${escapeHtml(t.name||'')}</span>
-              <span class="ellip">${escapeHtml((t.entries&&t.entries[0]&&t.entries[0].name)||t.notes||'…')}</span>
-            </div>
-            <div class="bar"><div class="rem" style="width:${pct}%"></div></div>
-            <div class="stat">${rem}/${cap}</div>
-          </div>
-          <div class="expander"></div>`;
-        row.querySelector('.row-head').onclick=()=>{
-          if(openId===t.id){openId=null;renderList();return;}
-          openId=t.id;renderList();
+        row.innerHTML =
+          '<div class="row-head">'+
+            '<div class="meta">'+
+              '<span class="badge">'+escapeHtml(t.name||'')+'</span>'+
+              '<span class="ellip">'+escapeHtml((t.entries&&t.entries[0]&&t.entries[0].name)||t.notes||'…')+'</span>'+
+            '</div>'+
+            '<div class="bar"><div class="rem" style="width:'+pct+'%"></div></div>'+
+            '<div class="stat">'+rem+'/'+cap+'</div>'+
+          '</div>'+
+          '<div class="expander"></div>';
+
+        row.querySelector('.row-head').onclick=function(){
+          if(openId===t.id){ openId=null; renderList(); return; }
+          openId=t.id; renderList();
         };
+
         list.appendChild(row);
-        if(t.id===openId) renderRowEditor(t,row.querySelector('.expander'));
+        if(t.id===openId){ renderRowEditor(t, row.querySelector('.expander')); }
       });
     }catch(e){
       console.error('renderList error:', e);
-      list.innerHTML='<div class="table-row"><span class="muted" style="padding:10px 12px">渲染失败，请点击“重置”再试</span></div>';
+      list.innerHTML='<div class="table-row"><span class="muted" style="padding:10px 12px">Render failed. Tap Reset and try again.</span></div>';
     }
   }
 
-  // ======= 行内展开编辑（新增物品必须拍照） =======
+  // ======= inline editor =======
   function renderRowEditor(t,box){
-    const rem=remainingOf(t), cap=Number(t.capacity||0);
-    box.innerHTML=`
-      <div class="field-2">
-        <label>名称<input class="in-name" type="text" value="${escapeAttr(t.name||'')}"></label>
-        <div></div>
-      </div>
-      <div class="field-2">
-        <label>总容量<input class="in-cap" type="number" value="${cap}"></label>
-        <label>剩余<input class="in-rem" type="number" disabled value="${rem}"></label>
-      </div>
-      <div class="field"><label>备注<textarea class="in-notes" placeholder="例如：上层/有电源/加锁">${escapeHtml(t.notes||'')}</textarea></label></div>
+    var rem=remainingOf(t), cap=Number(t.capacity||0);
+    box.innerHTML =
+      '<div class="field-2">'+
+        '<label>Name<input class="in-name" type="text" value="'+escapeAttr(t.name||'')+'"></label>'+
+        '<div></div>'+
+      '</div>'+
+      '<div class="field-2">'+
+        '<label>Capacity<input class="in-cap" type="number" value="'+cap+'"></label>'+
+        '<label>Remaining<input class="in-rem" type="number" disabled value="'+rem+'"></label>'+
+      '</div>'+
+      '<div class="field"><label>Notes<textarea class="in-notes" placeholder="e.g., upper shelf / power / locked">'+escapeHtml(t.notes||'')+'</textarea></label></div>'+
 
-      <div class="field"><strong>当前内部照片（必拍，新增物品时会更新）</strong></div>
-      <div class="photo comp-ph">${t.compartmentPhoto?`<img src="${t.compartmentPhoto}">`:'<span class="muted">暂无照片</span>'}</div>
-      <div class="actions" style="margin-top:6px">
-        <label class="btn ghost">重新拍照<input class="comp-photo" type="file" accept="image/*" capture="environment" hidden></label>
-        ${t.compartmentPhoto?'<button class="btn ghost comp-clear">清除</button>':''}
-      </div>
+      '<div class="field"><strong>Current compartment photo (will be updated when adding items)</strong></div>'+
+      '<div class="photo comp-ph">'+(t.compartmentPhoto?('<img src="'+t.compartmentPhoto+'">'):'<span class="muted">No photo</span>')+'</div>'+
+      '<div class="actions" style="margin-top:6px">'+
+        '<label class="btn ghost">Retake<input class="comp-photo" type="file" accept="image/*" capture="environment" hidden></label>'+
+        (t.compartmentPhoto?'<button class="btn ghost comp-clear">Clear</button>':'')+
+      '</div>'+
 
-      <hr>
-      <strong>新增物品（必须拍照）</strong>
-      <div class="field-3">
-        <label>名称<input class="i-name" type="text" placeholder="相机 / 蛋糕 / 保温壶"></label>
-        <label>大小<input class="i-size" type="number" min="0" step="1" placeholder="10"></label>
-        <label>来源
-          <select class="i-role">
-            <option value="bar">bar</option>
-            <option value="host">host</option>
-            <option value="server">server</option>
-            <option value="other" selected>other</option>
-          </select>
-        </label>
-      </div>
-      <div class="field"><label>备注（可选）<input class="i-note" type="text" placeholder="左上角 / 箱内"></label></div>
-      <div class="photo i-ph"><span class="muted">新增物品时请拍照（必填）</span></div>
-      <div class="actions">
-        <label class="btn ghost">拍照<input class="i-photo" type="file" accept="image/*" capture="environment" hidden></label>
-        <button class="btn ghost i-clear">清除照片</button>
-        <div class="sp"></div>
-        <button class="btn primary i-add">保存物品</button>
-      </div>
+      '<hr>'+
+      '<strong>Add Item (photo required)</strong>'+
+      '<div class="field-3">'+
+        '<label>Item name<input class="i-name" type="text" placeholder="Camera / Cake / Thermos"></label>'+
+        '<label>Size<input class="i-size" type="number" min="0" step="1" placeholder="10"></label>'+
+        '<label>From<select class="i-role">'+
+          '<option value="bar">bar</option>'+
+          '<option value="host">host</option>'+
+          '<option value="server">server</option>'+
+          '<option value="other" selected>other</option>'+
+        '</select></label>'+
+      '</div>'+
+      '<div class="field"><label>Note (optional)<input class="i-note" type="text" placeholder="Top-left / In box"></label></div>'+
+      '<div class="photo i-ph"><span class="muted">Please take a photo (required)</span></div>'+
+      '<div class="actions">'+
+        '<label class="btn ghost">Take photo<input class="i-photo" type="file" accept="image/*" capture="environment" hidden></label>'+
+        '<button class="btn ghost i-clear">Clear photo</button>'+
+        '<div class="sp"></div>'+
+        '<button class="btn primary i-add">Save Item</button>'+
+      '</div>'+
 
-      <div class="field" style="margin-top:10px"><strong>物品列表</strong></div>
-      <div class="inv i-list muted">暂无</div>
+      '<div class="field" style="margin-top:10px"><strong>Items</strong></div>'+
+      '<div class="inv i-list muted">None</div>'+
 
-      <div class="actions" style="margin-top:10px">
-        <button class="btn primary btn-save">保存桌子</button>
-        <button class="btn" style="background:#25161a;border-color:#4a2a32;color:#ff9aa9">删除桌子</button>
-      </div>`;
+      '<div class="actions" style="margin-top:10px">'+
+        '<button class="btn primary btn-save">Save Table</button>'+
+        '<button class="btn" style="background:#25161a;border-color:#4a2a32;color:#ff9aa9">Delete Table</button>'+
+      '</div>';
 
-    // 基本字段
-    box.querySelector('.in-name').onchange=e=>{t.name=e.target.value.trim();save();renderList();}
-    box.querySelector('.in-cap').onchange=e=>{t.capacity=Number(e.target.value)||0;box.querySelector('.in-rem').value=remainingOf(t);save();renderList();}
-    box.querySelector('.in-notes').onchange=e=>{t.notes=e.target.value;save();renderList();}
+    // fields
+    box.querySelector('.in-name').onchange=function(e){ t.name=e.target.value.trim(); save(); renderList(); };
+    box.querySelector('.in-cap').onchange=function(e){ t.capacity=Number(e.target.value)||0; box.querySelector('.in-rem').value=remainingOf(t); save(); renderList(); };
+    box.querySelector('.in-notes').onchange=function(e){ t.notes=e.target.value; save(); renderList(); };
 
-    // 仅保留“当前内部照片”一张（无历史）
-    const compInput=box.querySelector('.comp-photo');
-    if(compInput){ compInput.addEventListener('change', async ev=>{
-      const f=ev.target.files?.[0]; if(!f) return;
-      try{ t.compartmentPhoto = await compressImage(f); localStorage.setItem('photo:comp:'+t.id, t.compartmentPhoto); save(); renderRowEditor(t,box); renderList(); }catch{}
-    });}
-    const compClear=box.querySelector('.comp-clear');
-    if(compClear){ compClear.onclick=()=>{ t.compartmentPhoto=null; try{ localStorage.removeItem('photo:comp:'+t.id);}catch{}; save(); renderRowEditor(t,box); renderList(); }; }
+    // compartment photo (single, no history)
+    var compInput = box.querySelector('.comp-photo');
+    if(compInput){
+      compInput.addEventListener('change', function(ev){
+        var f = ev.target.files && ev.target.files[0]; if(!f) return;
+        compressImage(f).then(function(dt){
+          t.compartmentPhoto = dt;
+          try{ localStorage.setItem('photo:comp:'+t.id, dt); }catch(e){}
+          save(); renderRowEditor(t,box); renderList();
+        }).catch(function(){});
+      });
+    }
+    var compClear = box.querySelector('.comp-clear');
+    if(compClear){
+      compClear.onclick = function(){
+        t.compartmentPhoto = null;
+        try{ localStorage.removeItem('photo:comp:'+t.id); }catch(e){}
+        save(); renderRowEditor(t,box); renderList();
+      };
+    }
 
-    // 新增物品：必须拍照
-    let itemPhoto=null;
-    const iph=box.querySelector('.i-ph');
-    box.querySelector('.i-photo').addEventListener('change', async ev=>{
-      const f=ev.target.files?.[0]; if(!f) return;
-      try{ itemPhoto=await compressImage(f); iph.innerHTML=`<img src="${itemPhoto}">`; }catch{}
+    // add item (photo required)
+    var itemPhoto = null;
+    var iph = box.querySelector('.i-ph');
+    box.querySelector('.i-photo').addEventListener('change', function(ev){
+      var f = ev.target.files && ev.target.files[0]; if(!f) return;
+      compressImage(f).then(function(dt){
+        itemPhoto = dt; iph.innerHTML = '<img src="'+dt+'">';
+      }).catch(function(){});
     });
-    box.querySelector('.i-clear').onclick=()=>{ itemPhoto=null; iph.innerHTML='<span class="muted">新增物品时请拍照（必填）</span>'; };
+    box.querySelector('.i-clear').onclick = function(){ itemPhoto=null; iph.innerHTML='<span class="muted">Please take a photo (required)</span>'; };
 
-    box.querySelector('.i-add').onclick=()=>{
-      const name=box.querySelector('.i-name').value.trim();
-      const size=Number(box.querySelector('.i-size').value||0);
-      const role=box.querySelector('.i-role').value;
-      const note=box.querySelector('.i-note').value.trim();
-      if(!name){ alert('请输入物品名称'); return; }
-      if(size<0){ alert('大小需≥0'); return; }
-      if(!itemPhoto){ alert('请为新增物品拍照（必填）'); return; }
+    box.querySelector('.i-add').onclick = function(){
+      var name = box.querySelector('.i-name').value.trim();
+      var size = Number(box.querySelector('.i-size').value||0);
+      var role = box.querySelector('.i-role').value;
+      var note = box.querySelector('.i-note').value.trim();
+      if(!name){ alert('Please enter item name'); return; }
+      if(size<0){ alert('Size must be ≥ 0'); return; }
+      if(!itemPhoto){ alert('Photo is required'); return; }
 
-      // 更新桌子的“当前内部照片”为这次拍的照片
+      // set this as the current compartment photo
       t.compartmentPhoto = itemPhoto;
-      try{ localStorage.setItem('photo:comp:'+t.id, itemPhoto); }catch{}
+      try{ localStorage.setItem('photo:comp:'+t.id, itemPhoto); }catch(e){}
 
-      // 写入物品
-      t.entries.unshift({id:eid(), name, size, note, role, addedAt:Date.now()});
+      // add entry
+      if(!Array.isArray(t.entries)) t.entries=[];
+      t.entries.unshift({id:eid(), name:name, size:size, note:note, role:role, addedAt:Date.now()});
 
-      // 清空表单
-      box.querySelector('.i-name').value=''; box.querySelector('.i-size').value=''; box.querySelector('.i-note').value='';
-      itemPhoto=null; iph.innerHTML='<span class="muted">新增物品时请拍照（必填）</span>';
+      // clear form
+      box.querySelector('.i-name').value='';
+      box.querySelector('.i-size').value='';
+      box.querySelector('.i-note').value='';
+      itemPhoto=null; iph.innerHTML='<span class="muted">Please take a photo (required)</span>';
 
-      // 更新 UI
-      box.querySelector('.in-rem').value=remainingOf(t);
+      // update UI
+      var remInput = box.querySelector('.in-rem'); if(remInput) remInput.value = remainingOf(t);
       save(); renderInvList(t, box.querySelector('.i-list')); renderLabelsWall(); renderList();
     };
 
-    // 物品列表
     renderInvList(t, box.querySelector('.i-list'));
 
-    // 保存/删除
-    box.querySelector('.btn-save').onclick=()=>{save();renderList();}
-    box.querySelector('.actions .btn:last-child').onclick=()=>{
-      if(!confirm(`删除 ${t.name}?`)) return;
-      try{ localStorage.removeItem('photo:comp:'+t.id);}catch{}
-      data.tables=(data.tables||[]).filter(x=>x.id!==t.id); openId=null; save(); renderLabelsWall(); renderList();
+    // save/delete
+    box.querySelector('.btn-save').onclick = function(){ save(); renderList(); };
+    box.querySelector('.actions .btn:last-child').onclick = function(){
+      if(!confirm('Delete '+(t.name||'this table')+'?')) return;
+      try{ localStorage.removeItem('photo:comp:'+t.id); }catch(e){}
+      data.tables = (data.tables||[]).filter(function(x){ return x.id!==t.id; });
+      openId=null; save(); renderLabelsWall(); renderList();
     };
   }
 
   function renderInvList(t, container){
     container.innerHTML='';
-    const arr=Array.isArray(t.entries)?t.entries:[];
-    if(!arr.length){ container.textContent='暂无'; container.classList.add('muted'); return; }
+    var arr = Array.isArray(t.entries)?t.entries:[];
+    if(arr.length===0){ container.textContent='None'; container.classList.add('muted'); return; }
     container.classList.remove('muted');
-    arr.forEach(en=>{
-      const row=document.createElement('div'); row.className='inv-card';
-      row.innerHTML = `
-        <div>
-          <div><b>${escapeHtml(en.name)}</b> <span class="tag">Size ${Number(en.size||0)}</span> <span class="tag">${escapeHtml(en.role||'other')}</span></div>
-          <div class="muted" style="max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(en.note||'')}</div>
-          <div class="muted" style="font-size:12px">${new Date(en.addedAt).toLocaleString()}</div>
-        </div>
-        <div class="sp"></div>
-        <button class="btn btn-del" style="background:#25161a;border-color:#4a2a32;color:#ff9aa9">删除</button>`;
-      row.querySelector('.btn-del').onclick=()=>{
-        t.entries=(t.entries||[]).filter(x=>x.id!==en.id);
+    arr.forEach(function(en){
+      var row=document.createElement('div'); row.className='inv-card';
+      row.innerHTML =
+        '<div>'+
+          '<div><b>'+escapeHtml(en.name)+'</b> <span class="tag">Size '+Number(en.size||0)+'</span> <span class="tag">'+escapeHtml(en.role||'other')+'</span></div>'+
+          '<div class="muted" style="max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escapeHtml(en.note||'')+'</div>'+
+          '<div class="muted" style="font-size:12px">'+new Date(en.addedAt).toLocaleString()+'</div>'+
+        '</div>'+
+        '<div class="sp"></div>'+
+        '<button class="btn btn-del" style="background:#25161a;border-color:#4a2a32;color:#ff9aa9">Delete</button>';
+      row.querySelector('.btn-del').onclick = function(){
+        t.entries = (t.entries||[]).filter(function(x){ return x.id!==en.id; });
         save(); renderInvList(t, container); renderLabelsWall();
-        const ex = container.closest('.expander'); ex?.querySelector('.in-rem')?.value = remainingOf(t);
+        var ex = container.closest ? container.closest('.expander') : container.parentNode;
+        if(ex){ var remInput = ex.querySelector('.in-rem'); if(remInput) remInput.value = remainingOf(t); }
         renderList();
       };
       container.appendChild(row);
     });
   }
 
-  // ======= 工具栏 / 搜索 / 重置 =======
+  // ======= toolbar =======
   function bindToolbar(){
-    $('#addTable').onclick=()=>{const t=newTable('Custom '+((data.tables||[]).length+1));data.tables.unshift(t);openId=t.id;save();renderLabelsWall();renderList();};
-    $('#addPair').onclick=()=>{const n=nextAvailableNumber();if(n==null){alert('有效编号已用完（排除含4/7）');return;}const left=newTable(`${n} Left`),right=newTable(`${n} Right`);data.tables.unshift(right,left);openId=left.id;save();renderList();};
-    $('#find').onclick=runSearch; $('#q').onkeydown=e=>{if(e.key==='Enter')runSearch()}; $('#need').onkeydown=e=>{if(e.key==='Enter')runSearch()};
-    $('#clear').onclick=()=>{$('#q').value='';$('#need').value='';labelFilter='';openId=null;renderList();}
-    $('#reset').onclick=doReset;
+    $('#addTable').onclick = function(){
+      var t = newTable('Custom '+(((data.tables||[]).length)+1));
+      data.tables.unshift(t); openId=t.id; save(); renderLabelsWall(); renderList();
+    };
+    $('#addPair').onclick = function(){
+      var n = nextAvailableNumber();
+      if(n==null){ alert('No valid numbers left (4/7 excluded)'); return; }
+      var left=newTable(n+' Left'), right=newTable(n+' Right');
+      data.tables.unshift(right); data.tables.unshift(left);
+      openId=left.id; save(); renderList();
+    };
+    $('#find').onclick = runSearch;
+    $('#q').onkeydown = function(e){ if(e.key==='Enter') runSearch(); };
+    $('#need').onkeydown = function(e){ if(e.key==='Enter') runSearch(); };
+    $('#clear').onclick = function(){ $('#q').value=''; $('#need').value=''; labelFilter=''; openId=null; renderList(); };
+    $('#reset').onclick = doReset;
   }
   function runSearch(){
-    const kw=$('#q').value.trim().toLowerCase();
-    const req=Number($('#need').value)||0;
-    const out=(data.tables||[]).filter(t=>{
-      const textHit = !kw ||
-        (String(t.name||'').toLowerCase().includes(kw)) ||
-        (String(t.notes||'').toLowerCase().includes(kw)) ||
-        (Array.isArray(t.tags)&&t.tags.some(x=>String(x).toLowerCase().includes(kw))) ||
-        (Array.isArray(t.entries)&&t.entries.some(en=> String(en.name||'').toLowerCase().includes(kw) || String(en.note||'').toLowerCase().includes(kw)));
-      const labelHit = !labelFilter || (Array.isArray(t.entries)&&t.entries.some(en=> String(en.name||'').toLowerCase()===labelFilter));
-      const spaceHit = isNaN(req) || req<=0 || remainingOf(t)>=req;
+    var kw = $('#q').value.trim().toLowerCase();
+    var req = Number($('#need').value)||0;
+    var out = (data.tables||[]).filter(function(t){
+      var textHit = !kw ||
+        String(t.name||'').toLowerCase().includes(kw) ||
+        String(t.notes||'').toLowerCase().includes(kw) ||
+        (Array.isArray(t.tags) && t.tags.some(function(x){return String(x).toLowerCase().includes(kw);} )) ||
+        (Array.isArray(t.entries) && t.entries.some(function(en){
+          return String(en.name||'').toLowerCase().includes(kw) || String(en.note||'').toLowerCase().includes(kw);
+        }));
+      var labelHit = !labelFilter || (Array.isArray(t.entries) && t.entries.some(function(en){ return String(en.name||'').toLowerCase()===labelFilter; }));
+      var spaceHit = isNaN(req) || req<=0 || remainingOf(t)>=req;
       return textHit && labelHit && spaceHit;
     });
     openId=null; renderList(out);
   }
   function doReset(){
-    if(!confirm('重置后将清空本地数据并使用默认种子，确定吗？')) return;
-    try {
-      const raw = localStorage.getItem(stateKey);
+    if(!confirm('Reset will clear local data and rebuild default tables. Continue?')) return;
+    try{
+      var raw = localStorage.getItem(stateKey);
       if(raw){
-        const parsed = JSON.parse(raw);
+        var parsed = JSON.parse(raw);
         if(parsed && Array.isArray(parsed.tables)){
-          parsed.tables.forEach(t => localStorage.removeItem('photo:comp:'+t.id));
+          parsed.tables.forEach(function(t){ localStorage.removeItem('photo:comp:'+t.id); });
         }
       }
-    } catch {}
+    }catch(e){}
     localStorage.removeItem(stateKey);
     data = seed();
-    openId = null;
-    try { localStorage.setItem(stateKey, JSON.stringify(data)); } catch {}
+    openId=null;
+    try{ localStorage.setItem(stateKey, JSON.stringify(data)); }catch(e){}
     renderLabelsWall();
     renderList();
-    alert('已重置为默认列表');
+    alert('Reset done.');
   }
 
-  // ======= 杂项工具 =======
-  function escapeHtml(s){return (s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
-  function escapeAttr(s){return escapeHtml(s).replace(/"/g,'&quot;')}
-  function compressImage(file,{maxW=1280,maxH=1280,quality=0.82}={}){
-    return new Promise((resolve,reject)=>{
-      const r=new FileReader();
-      r.onload=()=>{ const img=new Image(); img.onload=()=>{
-          const w=img.naturalWidth||img.width,h=img.naturalHeight||img.height;
-          const ratio=Math.min(1,maxW/w,maxH/h), cw=Math.max(1,Math.round(w*ratio)), ch=Math.max(1,Math.round(h*ratio));
-          const c=document.createElement('canvas'); c.width=cw; c.height=ch; const ctx=c.getContext('2d'); ctx.drawImage(img,0,0,cw,ch);
-          try{ resolve(c.toDataURL('image/jpeg',quality)); }catch(e){ reject(e); }
-        }; img.onerror=reject; img.src=r.result; };
+  // ======= utils =======
+  function escapeHtml(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function escapeAttr(s){ return escapeHtml(s).replace(/"/g,'&quot;'); }
+  function compressImage(file, opts){
+    opts = opts || {};
+    var maxW = opts.maxW || 1280, maxH = opts.maxH || 1280, q = ('quality' in opts)?opts.quality:0.82;
+    return new Promise(function(resolve,reject){
+      var r=new FileReader();
+      r.onload=function(){
+        var img=new Image();
+        img.onload=function(){
+          var w=img.naturalWidth||img.width, h=img.naturalHeight||img.height;
+          var ratio=Math.min(1, maxW/w, maxH/h);
+          var cw=Math.max(1,Math.round(w*ratio)), ch=Math.max(1,Math.round(h*ratio));
+          var c=document.createElement('canvas'); c.width=cw; c.height=ch;
+          var ctx=c.getContext('2d'); ctx.drawImage(img,0,0,cw,ch);
+          try{ resolve(c.toDataURL('image/jpeg', q)); }catch(e){ reject(e); }
+        };
+        img.onerror=reject; img.src=r.result;
+      };
       r.onerror=reject; r.readAsDataURL(file);
     });
   }
-  function parseNumberAndSide(name){const m=String(name||'').match(/^(\d{1,2})\s+(left|right)$/i);return m?{num:+m[1],side:m[2].toLowerCase()}:null}
-  function isValidNumber(n){return n>=1&&n<=88&&!/[47]/.test(String(n).padStart(2,'0'))}
+  function parseNumberAndSide(name){
+    var m = String(name||'').match(/^(\d{1,2})\s+(left|right)$/i);
+    return m ? {num:+m[1], side:m[2].toLowerCase()} : null;
+  }
+  function isValidNumber(n){ return n>=1 && n<=88 && !/[47]/.test(String(n).padStart(2,'0')); }
   function nextAvailableNumber(){
-    const used=new Map();
-    for(const t of (data.tables||[])){ const p=parseNumberAndSide(t.name); if(!p || !isValidNumber(p.num)) continue; if(!used.has(p.num)) used.set(p.num,new Set()); used.get(p.num).add(p.side); }
-    for(let n=1;n<=88;n++){ if(!isValidNumber(n)) continue; const s=used.get(n); if(!s || s.size<2) return n; }
+    var used=new Map();
+    (data.tables||[]).forEach(function(t){
+      var p=parseNumberAndSide(t.name);
+      if(!p || !isValidNumber(p.num)) return;
+      if(!used.has(p.num)) used.set(p.num,new Set());
+      used.get(p.num).add(p.side);
+    });
+    for(var n=1;n<=88;n++){
+      if(!isValidNumber(n)) continue;
+      var s=used.get(n);
+      if(!s || s.size<2) return n;
+    }
     return null;
   }
 })();
