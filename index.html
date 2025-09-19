@@ -74,6 +74,7 @@ textarea{min-height:84px;resize:vertical}
     <input id="need" type="number" min="0" step="1" style="width:120px" placeholder="需要空间" />
     <button id="find" class="btn ghost">搜索</button>
     <button id="clear" class="btn ghost">清空</button>
+    <button id="reset" class="btn ghost">重置</button>
   </div>
 </header>
 
@@ -99,8 +100,10 @@ textarea{min-height:84px;resize:vertical}
   const stateKey='bar.inv.photo.one.v1';
 
   let data = load() || seed();
+  // 启动兜底：确保有 tables 数组
+  if (!data || !Array.isArray(data.tables)) { data = seed(); try{ localStorage.setItem(stateKey, JSON.stringify(data)); }catch{} }
   let openId = null;
-  let labelFilter = ''; // 点击标签后的快速筛选
+  let labelFilter = ''; // 点击标签后的筛选
 
   renderLabelsWall();
   renderList();
@@ -110,7 +113,7 @@ textarea{min-height:84px;resize:vertical}
   function uid(){ return 't'+Math.random().toString(36).slice(2,9) }
   function eid(){ return 'e'+Math.random().toString(36).slice(2,9) }
   function newTable(name){ return {id:uid(), name, notes:'', tags:[], capacity:100, entries:[], compartmentPhoto:null}; }
-  function remainingOf(t){ const used=(t.entries||[]).reduce((s,e)=>s+Number(e.size||0),0); return Math.max(0, Number(t.capacity||0)-used); }
+  function remainingOf(t){ const used=(Array.isArray(t.entries)?t.entries:[]).reduce((s,e)=>s+Number(e.size||0),0); return Math.max(0, Number(t.capacity||0)-used); }
 
   function seed(){
     const tables=[]; const isValid=n=>!/[47]/.test(String(n).padStart(2,'0'));
@@ -120,10 +123,10 @@ textarea{min-height:84px;resize:vertical}
 
   function save(){
     try{
-      const slim={tables:data.tables.map(t=>{
+      const slim={tables:(Array.isArray(data.tables)?data.tables:[]).map(t=>{
         if(t.compartmentPhoto){ try{ localStorage.setItem('photo:comp:'+t.id, t.compartmentPhoto);}catch(e){} }
         const {compartmentPhoto, ...rest}=t;
-        return {...rest};
+        return {...rest, entries:Array.isArray(t.entries)?t.entries:[]};
       })};
       localStorage.setItem(stateKey, JSON.stringify(slim));
       return true;
@@ -133,7 +136,12 @@ textarea{min-height:84px;resize:vertical}
     try{
       const raw=localStorage.getItem(stateKey); if(!raw) return null;
       const slim=JSON.parse(raw);
-      const tables=(slim.tables||[]).map(t=>({...t, compartmentPhoto:localStorage.getItem('photo:comp:'+t.id)||null}));
+      if(!slim || !Array.isArray(slim.tables)) return null;
+      const tables=slim.tables.map(t=>({
+        ...t,
+        entries:Array.isArray(t.entries)?t.entries:[],
+        compartmentPhoto:localStorage.getItem('photo:comp:'+t.id)||null
+      }));
       return {tables};
     }catch{ return null }
   }
@@ -141,14 +149,14 @@ textarea{min-height:84px;resize:vertical}
   // ======= 标签墙（按物品名汇总） =======
   function computeNameCounts(){
     const map = new Map();
-    for(const t of data.tables){
+    for(const t of (data.tables||[])){
       for(const en of (t.entries||[])){
         const key=(en.name||'').trim();
         if(!key) continue;
         map.set(key,(map.get(key)||0)+1);
       }
     }
-    return map; // name -> count
+    return map;
   }
   function renderLabelsWall(){
     labelsBox.innerHTML='';
@@ -157,7 +165,7 @@ textarea{min-height:84px;resize:vertical}
     const frag=document.createDocumentFragment();
     [...map.entries()].sort((a,b)=> b[1]-a[1] || a[0].localeCompare(b[0])).forEach(([name,count])=>{
       const chip=document.createElement('span'); chip.className='chip';
-      chip.innerHTML = `<b>${escape(name)}</b> <span class="muted">×${count}</span>`;
+      chip.innerHTML = `<b>${escapeHtml(name)}</b> <span class="muted">×${count}</span>`;
       chip.onclick = ()=>{ labelFilter = name.toLowerCase(); $('#q').value = name; runSearch(); };
       frag.appendChild(chip);
     });
@@ -165,48 +173,57 @@ textarea{min-height:84px;resize:vertical}
   }
 
   // ======= 列表（默认按剩余降序） =======
-  function renderList(items=data.tables){
-    items=[...items].sort((a,b)=>remainingOf(b)-remainingOf(a));
-    list.innerHTML='';
-    if(!items.length){ list.innerHTML='<div class="table-row"><span class="muted" style="padding:10px 12px">没有桌子</span></div>'; return; }
+  function renderList(items = (data && Array.isArray(data.tables) ? data.tables : [])){
+    try{
+      items = Array.isArray(items) ? items : [];
+      items = [...items].sort((a,b)=> remainingOf(b) - remainingOf(a));
+      list.innerHTML='';
+      if(items.length===0){
+        list.innerHTML='<div class="table-row"><span class="muted" style="padding:10px 12px">没有桌子</span></div>';
+        return;
+      }
 
-    items.forEach(t=>{
-      const rem=remainingOf(t), cap=Number(t.capacity||0), pct=cap>0?(rem/cap)*100:0;
-      const row=document.createElement('div');
-      row.className='table-row';
-      if(t.id===openId) row.classList.add('open');
-      row.innerHTML=`
-        <div class="row-head">
-          <div class="meta">
-            <span class="badge">${escape(t.name)}</span>
-            <span class="ellip">${escape(t.entries?.[0]?.name||t.notes||'…')}</span>
+      items.forEach(t=>{
+        const rem=remainingOf(t), cap=Number(t.capacity||0), pct=cap>0?(rem/cap)*100:0;
+        const row=document.createElement('div');
+        row.className='table-row';
+        if(t.id===openId) row.classList.add('open');
+        row.innerHTML=`
+          <div class="row-head">
+            <div class="meta">
+              <span class="badge">${escapeHtml(t.name||'')}</span>
+              <span class="ellip">${escapeHtml((t.entries&&t.entries[0]&&t.entries[0].name)||t.notes||'…')}</span>
+            </div>
+            <div class="bar"><div class="rem" style="width:${pct}%"></div></div>
+            <div class="stat">${rem}/${cap}</div>
           </div>
-          <div class="bar"><div class="rem" style="width:${pct}%"></div></div>
-          <div class="stat">${rem}/${cap}</div>
-        </div>
-        <div class="expander"></div>`;
-      row.querySelector('.row-head').onclick=()=>{
-        if(openId===t.id){openId=null;renderList();return;}
-        openId=t.id;renderList();
-      };
-      list.appendChild(row);
-      if(t.id===openId) renderRowEditor(t,row.querySelector('.expander'));
-    });
+          <div class="expander"></div>`;
+        row.querySelector('.row-head').onclick=()=>{
+          if(openId===t.id){openId=null;renderList();return;}
+          openId=t.id;renderList();
+        };
+        list.appendChild(row);
+        if(t.id===openId) renderRowEditor(t,row.querySelector('.expander'));
+      });
+    }catch(e){
+      console.error('renderList error:', e);
+      list.innerHTML='<div class="table-row"><span class="muted" style="padding:10px 12px">渲染失败，请点击“重置”再试</span></div>';
+    }
   }
 
-  // ======= 行内展开编辑（含必须拍照） =======
+  // ======= 行内展开编辑（新增物品必须拍照） =======
   function renderRowEditor(t,box){
     const rem=remainingOf(t), cap=Number(t.capacity||0);
     box.innerHTML=`
       <div class="field-2">
-        <label>名称<input class="in-name" type="text" value="${escapeAttr(t.name)}"></label>
+        <label>名称<input class="in-name" type="text" value="${escapeAttr(t.name||'')}"></label>
         <div></div>
       </div>
       <div class="field-2">
         <label>总容量<input class="in-cap" type="number" value="${cap}"></label>
         <label>剩余<input class="in-rem" type="number" disabled value="${rem}"></label>
       </div>
-      <div class="field"><label>备注<textarea class="in-notes" placeholder="例如：上层/有电源/加锁">${escape(t.notes||'')}</textarea></label></div>
+      <div class="field"><label>备注<textarea class="in-notes" placeholder="例如：上层/有电源/加锁">${escapeHtml(t.notes||'')}</textarea></label></div>
 
       <div class="field"><strong>当前内部照片（必拍，新增物品时会更新）</strong></div>
       <div class="photo comp-ph">${t.compartmentPhoto?`<img src="${t.compartmentPhoto}">`:'<span class="muted">暂无照片</span>'}</div>
@@ -302,29 +319,28 @@ textarea{min-height:84px;resize:vertical}
     box.querySelector('.actions .btn:last-child').onclick=()=>{
       if(!confirm(`删除 ${t.name}?`)) return;
       try{ localStorage.removeItem('photo:comp:'+t.id);}catch{}
-      data.tables=data.tables.filter(x=>x.id!==t.id); openId=null; save(); renderLabelsWall(); renderList();
+      data.tables=(data.tables||[]).filter(x=>x.id!==t.id); openId=null; save(); renderLabelsWall(); renderList();
     };
   }
 
   function renderInvList(t, container){
     container.innerHTML='';
-    const arr=t.entries||[];
+    const arr=Array.isArray(t.entries)?t.entries:[];
     if(!arr.length){ container.textContent='暂无'; container.classList.add('muted'); return; }
     container.classList.remove('muted');
     arr.forEach(en=>{
       const row=document.createElement('div'); row.className='inv-card';
       row.innerHTML = `
         <div>
-          <div><b>${escape(en.name)}</b> <span class="tag">Size ${Number(en.size||0)}</span> <span class="tag">${escape(en.role||'other')}</span></div>
-          <div class="muted" style="max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escape(en.note||'')}</div>
+          <div><b>${escapeHtml(en.name)}</b> <span class="tag">Size ${Number(en.size||0)}</span> <span class="tag">${escapeHtml(en.role||'other')}</span></div>
+          <div class="muted" style="max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(en.note||'')}</div>
           <div class="muted" style="font-size:12px">${new Date(en.addedAt).toLocaleString()}</div>
         </div>
         <div class="sp"></div>
         <button class="btn btn-del" style="background:#25161a;border-color:#4a2a32;color:#ff9aa9">删除</button>`;
       row.querySelector('.btn-del').onclick=()=>{
-        t.entries=t.entries.filter(x=>x.id!==en.id);
+        t.entries=(t.entries||[]).filter(x=>x.id!==en.id);
         save(); renderInvList(t, container); renderLabelsWall();
-        // 同步剩余
         const ex = container.closest('.expander'); ex?.querySelector('.in-rem')?.value = remainingOf(t);
         renderList();
       };
@@ -332,32 +348,52 @@ textarea{min-height:84px;resize:vertical}
     });
   }
 
-  // ======= 工具栏 / 搜索 =======
+  // ======= 工具栏 / 搜索 / 重置 =======
   function bindToolbar(){
-    $('#addTable').onclick=()=>{const t=newTable('Custom '+(data.tables.length+1));data.tables.unshift(t);openId=t.id;save();renderLabelsWall();renderList();};
+    $('#addTable').onclick=()=>{const t=newTable('Custom '+((data.tables||[]).length+1));data.tables.unshift(t);openId=t.id;save();renderLabelsWall();renderList();};
     $('#addPair').onclick=()=>{const n=nextAvailableNumber();if(n==null){alert('有效编号已用完（排除含4/7）');return;}const left=newTable(`${n} Left`),right=newTable(`${n} Right`);data.tables.unshift(right,left);openId=left.id;save();renderList();};
     $('#find').onclick=runSearch; $('#q').onkeydown=e=>{if(e.key==='Enter')runSearch()}; $('#need').onkeydown=e=>{if(e.key==='Enter')runSearch()};
     $('#clear').onclick=()=>{$('#q').value='';$('#need').value='';labelFilter='';openId=null;renderList();}
+    $('#reset').onclick=doReset;
   }
   function runSearch(){
     const kw=$('#q').value.trim().toLowerCase();
     const req=Number($('#need').value)||0;
-    const out=data.tables.filter(t=>{
+    const out=(data.tables||[]).filter(t=>{
       const textHit = !kw ||
-        (t.name||'').toLowerCase().includes(kw) ||
-        (t.notes||'').toLowerCase().includes(kw) ||
-        (t.tags||[]).some(x=>String(x).toLowerCase().includes(kw)) ||
-        (t.entries||[]).some(en=> (en.name||'').toLowerCase().includes(kw) || (en.note||'').toLowerCase().includes(kw));
-      const labelHit = !labelFilter || (t.entries||[]).some(en=> (en.name||'').toLowerCase()===labelFilter);
+        (String(t.name||'').toLowerCase().includes(kw)) ||
+        (String(t.notes||'').toLowerCase().includes(kw)) ||
+        (Array.isArray(t.tags)&&t.tags.some(x=>String(x).toLowerCase().includes(kw))) ||
+        (Array.isArray(t.entries)&&t.entries.some(en=> String(en.name||'').toLowerCase().includes(kw) || String(en.note||'').toLowerCase().includes(kw)));
+      const labelHit = !labelFilter || (Array.isArray(t.entries)&&t.entries.some(en=> String(en.name||'').toLowerCase()===labelFilter));
       const spaceHit = isNaN(req) || req<=0 || remainingOf(t)>=req;
       return textHit && labelHit && spaceHit;
     });
     openId=null; renderList(out);
   }
+  function doReset(){
+    if(!confirm('重置后将清空本地数据并使用默认种子，确定吗？')) return;
+    try {
+      const raw = localStorage.getItem(stateKey);
+      if(raw){
+        const parsed = JSON.parse(raw);
+        if(parsed && Array.isArray(parsed.tables)){
+          parsed.tables.forEach(t => localStorage.removeItem('photo:comp:'+t.id));
+        }
+      }
+    } catch {}
+    localStorage.removeItem(stateKey);
+    data = seed();
+    openId = null;
+    try { localStorage.setItem(stateKey, JSON.stringify(data)); } catch {}
+    renderLabelsWall();
+    renderList();
+    alert('已重置为默认列表');
+  }
 
   // ======= 杂项工具 =======
-  function escape(s){return (s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
-  function escapeAttr(s){return escape(s).replace(/"/g,'&quot;')}
+  function escapeHtml(s){return (s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+  function escapeAttr(s){return escapeHtml(s).replace(/"/g,'&quot;')}
   function compressImage(file,{maxW=1280,maxH=1280,quality=0.82}={}){
     return new Promise((resolve,reject)=>{
       const r=new FileReader();
@@ -374,7 +410,7 @@ textarea{min-height:84px;resize:vertical}
   function isValidNumber(n){return n>=1&&n<=88&&!/[47]/.test(String(n).padStart(2,'0'))}
   function nextAvailableNumber(){
     const used=new Map();
-    for(const t of data.tables){ const p=parseNumberAndSide(t.name); if(!p || !isValidNumber(p.num)) continue; if(!used.has(p.num)) used.set(p.num,new Set()); used.get(p.num).add(p.side); }
+    for(const t of (data.tables||[])){ const p=parseNumberAndSide(t.name); if(!p || !isValidNumber(p.num)) continue; if(!used.has(p.num)) used.set(p.num,new Set()); used.get(p.num).add(p.side); }
     for(let n=1;n<=88;n++){ if(!isValidNumber(n)) continue; const s=used.get(n); if(!s || s.size<2) return n; }
     return null;
   }
