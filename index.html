@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Inventory – Bar View (Supabase, no login)</title>
+<title>Inventory – Bar View</title>
 <style>
 :root{
   --bg:#0b0d10; --card:#12161b; --muted:#8892a6; --text:#e6edf3; --accent:#6aa6ff;
@@ -17,8 +17,6 @@ header{position:sticky;top:0;z-index:5;background:rgba(13,17,23,.92);backdrop-fi
 .btn:hover{border-color:#3a4556}
 .btn.primary{background:linear-gradient(180deg,#2a5fff,#1b50e6);border-color:#2c57d0}
 .btn.ghost{background:transparent}
-
-/* inputs */
 input[type="text"],input[type="number"],textarea,select{
   background:#0f1318;border:1px solid #2a3240;color:var(--text);border-radius:.6rem;padding:.55rem .6rem;outline:none;max-width:100%;
 }
@@ -42,33 +40,27 @@ textarea{min-height:84px;resize:vertical}
 .expander{display:none;margin-top:10px;padding:12px;border:1px solid #243042;border-radius:10px;background:#0f1318}
 .table-row.open .expander{display:block}
 
-/* layout helpers */
-.field    { margin:.6rem 0 }
-.field-2  { display:grid; grid-template-columns:1fr 1fr; gap:.6rem }
-.field-3  { display:grid; grid-template-columns:1fr 1fr 1fr; gap:.6rem }
-.actions  { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap }
+.field{margin:.6rem 0}
+.field-2{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+.actions{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
 
-/* photos */
 .photo{width:100%;aspect-ratio:4/3;background:#0f1318;border:1px dashed #344055;border-radius:12px;display:grid;place-items:center;overflow:hidden}
 .photo img{width:100%;height:100%;object-fit:cover}
 
-/* items */
 .inv{border-top:1px solid #202632;margin-top:8px;padding-top:8px;max-height:260px;overflow:auto}
 .inv-card{display:flex;gap:.6rem;align-items:center;border:1px solid #243042;border-radius:10px;padding:6px 8px;margin-bottom:8px}
 .tag{display:inline-block;background:#152032;border:1px solid #243042;padding:.1rem .4rem;border-radius:999px;font-weight:600}
 
-/* labels wall */
 .chips{display:flex;gap:.4rem;flex-wrap:wrap}
 .chip{border:1px solid #2a3240;background:#10151a;padding:.25rem .55rem;border-radius:999px}
 #labelsWall{margin:8px 0 12px}
 #labelsWall .title{font-size:12px;color:var(--muted);margin:0 0 6px 2px}
 #labelsWall .chips{min-height:36px;border:1px dashed #2a3240;border-radius:10px;padding:8px}
 
-/* responsive */
 @media (max-width: 900px){
   .table-row{min-height:68px}
-  .row-head{grid-template-columns: minmax(100px,160px) 1fr max-content}
-  .field-2{ grid-template-columns:1fr; } /* stack on mobile */
+  .row-head{grid-template-columns:minmax(100px,160px) 1fr max-content}
+  .field-2{grid-template-columns:1fr;}
 }
 </style>
 </head>
@@ -81,42 +73,38 @@ textarea{min-height:84px;resize:vertical}
     <input id="need" type="number" min="0" step="1" style="width:120px" placeholder="Required space" />
     <button id="find" class="btn ghost">Find</button>
     <button id="clear" class="btn ghost">Clear</button>
-    <button id="reset" class="btn ghost">Reset</button>
+    <button id="reset" class="btn ghost" title="Delete ALL data for this site slug">Reset</button>
   </div>
 </header>
 
 <main class="wrap">
   <div class="muted" style="margin:4px 2px 6px">Green = remaining space</div>
-
-  <!-- Auto labels from item names -->
   <section id="labelsWall">
     <div class="title">Auto labels (from item names). Tap to filter:</div>
     <div id="labelsBox" class="chips"></div>
   </section>
-
-  <div class="card">
-    <div id="tableList" class="list"></div>
-  </div>
+  <div class="card"><div id="tableList" class="list"></div></div>
 </main>
 
-<!-- Supabase SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-/* ====== Supabase CONFIG (your existing project) ====== */
+/* ===== Supabase config (your project) ===== */
 const SUPABASE_URL  = "https://ehfhcgzsirgebrfofaph.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVoZmhjZ3pzaXJnZWJyZm9mYXBoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1OTg5MjMsImV4cCI6MjA3MDE3NDkyM30.OOnzt-mCdQNYU3b17O3vtDTrPA2AmJPij8OhfnvMAN0";
-const SITE_SLUG     = "inventory-1";     // must match your SQL/RLS
+const SITE_SLUG     = "inventory-1";
 const BUCKET        = "compartment-photos";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
-/* ====== helpers ====== */
+/* ===== Helpers ===== */
 const $ = s => document.querySelector(s);
 const list = $('#tableList');
 const labelsBox = $('#labelsBox');
-function escapeHtml(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function escapeAttr(s){ return escapeHtml(s).replace(/"/g,'&quot;'); }
-function parseNumberAndSide(name){ const m=String(name||'').match(/^(\d{1,2})\s+(left|right)$/i); return m?{num:+m[1],side:m[2].toLowerCase()}:null; }
-function isValidNumber(n){ return n>=1 && n<=88 && !/[47]/.test(String(n).padStart(2,'0')); }
+
+function escapeHtml(s){return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function escapeAttr(s){return escapeHtml(s).replace(/"/g,'&quot;');}
+function parseNumSide(name){const m=String(name||'').match(/^(\d{1,2})\s+(left|right)$/i);return m?{num:+m[1],side:m[2].toLowerCase()}:null;}
+function isValid(n){return n>=1&&n<=88&&!/[47]/.test(String(n).padStart(2,'0'));}
+
 function compressImage(file,{maxW=1280,maxH=1280,quality=0.82}={}){
   return new Promise((resolve,reject)=>{
     const r=new FileReader();
@@ -127,130 +115,118 @@ function compressImage(file,{maxW=1280,maxH=1280,quality=0.82}={}){
         const ratio=Math.min(1,maxW/w,maxH/h), cw=Math.max(1,Math.round(w*ratio)), ch=Math.max(1,Math.round(h*ratio));
         const c=document.createElement('canvas'); c.width=cw; c.height=ch;
         c.getContext('2d').drawImage(img,0,0,cw,ch);
-        c.toBlob(b=> b?resolve(b):reject(new Error('toBlob failed')),'image/jpeg',quality);
+        c.toBlob(b=>b?resolve(b):reject(new Error('toBlob failed')),'image/jpeg',quality);
       };
       img.onerror=reject; img.src=r.result;
-    };
-    r.onerror=reject; r.readAsDataURL(file);
+    }; r.onerror=reject; r.readAsDataURL(file);
   });
 }
 
-/* ====== Data access (Supabase) ====== */
+/* ===== Supabase data access ===== */
 async function fetchSpaces(){
-  const { data, error } = await sb.from('spaces')
+  const {data,error}=await sb.from('spaces')
     .select('id,name,capacity,notes,photo_url,updated_at')
-    .eq('site_slug', SITE_SLUG)
-    .order('updated_at',{ascending:false});
+    .eq('site_slug',SITE_SLUG).order('name');
   if(error) throw error; return data||[];
 }
 async function fetchEntries(spaceId){
-  const { data, error } = await sb.from('entries')
+  const {data,error}=await sb.from('entries')
     .select('id,space_id,name,size,note,role,added_at')
-    .eq('site_slug', SITE_SLUG)
-    .eq('space_id', spaceId)
+    .eq('site_slug',SITE_SLUG).eq('space_id',spaceId)
     .order('added_at',{ascending:false});
   if(error) throw error; return data||[];
 }
 async function createSpace({name,capacity=100,notes=''}){
-  const { data, error } = await sb.from('spaces')
-    .insert({ name, capacity, notes, site_slug:SITE_SLUG })
-    .select().single();
+  const {data,error}=await sb.from('spaces')
+    .insert({name,capacity,notes,site_slug:SITE_SLUG}).select().single();
   if(error) throw error; return data;
 }
-async function updateSpace(id, patch){
-  const { data, error } = await sb.from('spaces')
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq('id', id).eq('site_slug', SITE_SLUG)
-    .select().single();
+async function updateSpace(id,patch){
+  const {data,error}=await sb.from('spaces')
+    .update({...patch,updated_at:new Date().toISOString()})
+    .eq('id',id).eq('site_slug',SITE_SLUG).select().single();
   if(error) throw error; return data;
 }
 async function deleteSpace(spaceId){
   await sb.from('entries').delete().eq('site_slug',SITE_SLUG).eq('space_id',spaceId);
-  const { error } = await sb.from('spaces').delete().eq('site_slug',SITE_SLUG).eq('id',spaceId);
+  const {error}=await sb.from('spaces').delete().eq('site_slug',SITE_SLUG).eq('id',spaceId);
   if(error) throw error;
 }
-async function addEntry(spaceId, {name,size,note,role,photoBlob}){
-  const url = await uploadPhoto(spaceId, photoBlob);
-  const { data: entry, error } = await sb.from('entries')
-    .insert({ space_id:spaceId, name, size, note, role, site_slug:SITE_SLUG })
+async function addEntry(spaceId,{name,size,note,role,photoBlob}){
+  const url=await uploadPhoto(spaceId,photoBlob);
+  const {data:entry,error}=await sb.from('entries')
+    .insert({space_id:spaceId,name,size,note,role,site_slug:SITE_SLUG})
     .select().single();
   if(error) throw error;
-  await updateSpace(spaceId, { photo_url: url });
+  await updateSpace(spaceId,{photo_url:url});
   return entry;
 }
 async function deleteEntry(entryId){
-  const { error } = await sb.from('entries').delete().eq('site_slug',SITE_SLUG).eq('id',entryId);
+  const {error}=await sb.from('entries').delete().eq('site_slug',SITE_SLUG).eq('id',entryId);
   if(error) throw error;
 }
-async function uploadPhoto(spaceId, blob){
-  if(!(blob instanceof Blob)) throw new Error('invalid photo blob');
-  const path = `${SITE_SLUG}/${spaceId}.jpg`;
-  const { error } = await sb.storage.from(BUCKET).upload(path, blob, { upsert:true, contentType:'image/jpeg' });
+async function uploadPhoto(spaceId,blob){
+  const path=`${SITE_SLUG}/${spaceId}.jpg`;
+  const {error}=await sb.storage.from(BUCKET).upload(path,blob,{upsert:true,contentType:'image/jpeg'});
   if(error) throw error;
-  const { data } = sb.storage.from(BUCKET).getPublicUrl(path);
+  const {data}=sb.storage.from(BUCKET).getPublicUrl(path);
   return data.publicUrl;
 }
 async function resetSite(){
-  if(!confirm(`This will DELETE ALL data for site "${SITE_SLUG}". Continue?`)) return;
+  if(!confirm(`This will DELETE ALL data for "${SITE_SLUG}". Continue?`)) return;
   await sb.from('entries').delete().eq('site_slug',SITE_SLUG);
   await sb.from('spaces').delete().eq('site_slug',SITE_SLUG);
-  const { data: objs } = await sb.storage.from(BUCKET).list(SITE_SLUG, { limit:1000 });
-  if(objs && objs.length){
-    await sb.storage.from(BUCKET).remove(objs.map(o=>`${SITE_SLUG}/${o.name}`));
-  }
+  const {data:objs}=await sb.storage.from(BUCKET).list(SITE_SLUG,{limit:1000});
+  if(objs?.length){ await sb.storage.from(BUCKET).remove(objs.map(o=>`${SITE_SLUG}/${o.name}`)); }
 }
 
-/* ====== Compute & labels ====== */
-function remainingOf(space, entries){
-  const used=(entries||[]).reduce((s,e)=> s+Number(e.size||0),0);
-  return Math.max(0, Number(space.capacity||0)-used);
+/* ===== Compute & labels ===== */
+function remainingOf(space,entries){
+  const used=(entries||[]).reduce((s,e)=>s+Number(e.size||0),0);
+  return Math.max(0,Number(space.capacity||0)-used);
 }
 async function renderLabelsWall(){
   labelsBox.innerHTML='';
-  const { data, error } = await sb.from('entries')
-    .select('name, count:id')
-    .eq('site_slug', SITE_SLUG)
-    .group('name')
-    .order('count',{ascending:false});
-  if(error || !data || data.length===0){ labelsBox.innerHTML='<span class="muted">No labels yet</span>'; return; }
+  const {data,error}=await sb.from('entries')
+    .select('name, count:id').eq('site_slug',SITE_SLUG)
+    .group('name').order('count',{ascending:false});
+  if(error||!data||!data.length){ labelsBox.innerHTML='<span class="muted">No labels yet</span>'; return; }
   data.forEach(row=>{
     const chip=document.createElement('span'); chip.className='chip';
-    chip.innerHTML = `<b>${escapeHtml(row.name)}</b> <span class="muted">×${row.count}</span>`;
-    chip.onclick = ()=>{ $('#q').value=row.name; runSearch(); };
+    chip.innerHTML=`<b>${escapeHtml(row.name)}</b> <span class="muted">×${row.count}</span>`;
+    chip.onclick=()=>{ $('#q').value=row.name; runSearch(); };
     labelsBox.appendChild(chip);
   });
 }
 
-/* ====== Render list (preserve your layout) ====== */
-let currentSpaces=[];              // list of spaces
-let cacheEntries=new Map();        // spaceId -> entries
+/* ===== Render ===== */
+let currentSpaces=[];          // spaces from supabase
+let cacheEntries=new Map();    // spaceId -> entries
 
 async function loadAll(){
-  currentSpaces = await fetchSpaces();
+  currentSpaces=await fetchSpaces();
   cacheEntries.clear();
-  for(const sp of currentSpaces){
-    cacheEntries.set(sp.id, await fetchEntries(sp.id));
-  }
+  for(const sp of currentSpaces){ cacheEntries.set(sp.id, await fetchEntries(sp.id)); }
   await renderLabelsWall();
   renderList();
 }
 
 function renderList(items){
-  const spaces = (items||currentSpaces).slice().map(sp=>{
-    const ents = cacheEntries.get(sp.id)||[];
-    return { sp, ents, rem: remainingOf(sp, ents), cap: Number(sp.capacity||0) };
-  }).sort((a,b)=> b.rem - a.rem);
+  const spaces=(items||currentSpaces).map(sp=>{
+    const ents=cacheEntries.get(sp.id)||[];
+    return {sp,ents,rem:remainingOf(sp,ents),cap:Number(sp.capacity||0)};
+  }).sort((a,b)=>b.rem-a.rem);
 
   list.innerHTML='';
-  if(spaces.length===0){
+  if(!spaces.length){
     list.innerHTML='<div class="table-row"><span class="muted" style="padding:10px 12px">No tables</span></div>';
     return;
   }
 
   spaces.forEach(({sp,ents,rem,cap})=>{
-    const pct = cap>0?(rem/cap)*100:0;
+    const pct=cap>0?(rem/cap)*100:0;
     const row=document.createElement('div'); row.className='table-row';
-    row.innerHTML =
+    row.innerHTML=
       '<div class="row-head">'+
         '<div class="meta">'+
           `<span class="badge">${escapeHtml(sp.name||'')}</span>`+
@@ -260,21 +236,20 @@ function renderList(items){
         `<div class="stat">${rem}/${cap}</div>`+
       '</div>'+
       '<div class="expander"></div>';
-    const head=row.querySelector('.row-head');
-    head.onclick=()=>{
-      const opened = row.classList.contains('open');
+    row.querySelector('.row-head').onclick=()=>{
+      const open=row.classList.contains('open');
       document.querySelectorAll('.table-row.open').forEach(n=>n.classList.remove('open'));
-      if(!opened){ row.classList.add('open'); renderRowEditor(sp, row.querySelector('.expander')); }
+      if(!open){ row.classList.add('open'); renderRowEditor(sp,row.querySelector('.expander')); }
     };
     list.appendChild(row);
   });
 }
 
-async function renderRowEditor(sp, box){
-  const ents = cacheEntries.get(sp.id)||[];
-  const rem = remainingOf(sp, ents), cap=Number(sp.capacity||0);
+async function renderRowEditor(sp,box){
+  const ents=cacheEntries.get(sp.id)||[];
+  const rem=remainingOf(sp,ents), cap=Number(sp.capacity||0);
 
-  box.innerHTML =
+  box.innerHTML=
     '<div class="field-2">'+
       `<label>Name<input class="in-name" type="text" value="${escapeAttr(sp.name||'')}"></label>`+
       '<div></div>'+
@@ -285,7 +260,7 @@ async function renderRowEditor(sp, box){
     '</div>'+
     `<div class="field"><label>Notes<textarea class="in-notes" placeholder="e.g., upper shelf / power / locked">${escapeHtml(sp.notes||'')}</textarea></label></div>`+
 
-    '<div class="field"><strong>Current compartment photo (updated when adding items)</strong></div>'+
+    '<div class="field"><strong>Current compartment photo</strong></div>'+
     `<div class="photo comp-ph">${sp.photo_url?`<img src="${sp.photo_url}">`:'<span class="muted">No photo</span>'}</div>`+
     '<div class="actions" style="margin-top:6px">'+
       '<label class="btn ghost">Retake<input class="comp-photo" type="file" accept="image/*" capture="environment" hidden></label>'+
@@ -297,7 +272,7 @@ async function renderRowEditor(sp, box){
     '<div class="field-2">'+
       '<label>Item name<input class="i-name" type="text" placeholder="Camera / Cake / Thermos"></label>'+
       '<label>Size<input class="i-size" type="number" min="0" step="1" placeholder="10"></label>'+
-    '</div>'+
+    </div>'+
     '<div class="field">'+
       '<label>From '+
         '<select class="i-role" style="width:100%">'+
@@ -325,67 +300,59 @@ async function renderRowEditor(sp, box){
       '<button class="btn btn-del-table" style="background:#25161a;border-color:#4a2a32;color:#ff9aa9">Delete Table</button>'+
     '</div>';
 
-  // table fields (immediate save like your local version)
-  box.querySelector('.in-name').onchange = async e => { await updateSpace(sp.id, { name:e.target.value.trim() }); await loadAll(); };
-  box.querySelector('.in-cap').onchange  = async e => { await updateSpace(sp.id, { capacity:Number(e.target.value)||0 }); await loadAll(); };
-  box.querySelector('.in-notes').onchange= async e => { await updateSpace(sp.id, { notes:e.target.value }); await loadAll(); };
+  // update table fields
+  box.querySelector('.in-name').onchange = async e=>{await updateSpace(sp.id,{name:e.target.value.trim()}); await loadAll();};
+  box.querySelector('.in-cap').onchange  = async e=>{await updateSpace(sp.id,{capacity:Number(e.target.value)||0}); await loadAll();};
+  box.querySelector('.in-notes').onchange= async e=>{await updateSpace(sp.id,{notes:e.target.value}); await loadAll();};
 
-  // compartment photo (retake / clear)
-  const compInput = box.querySelector('.comp-photo');
+  // compartment photo
+  const compInput=box.querySelector('.comp-photo');
   if(compInput){
-    compInput.addEventListener('change', async ev=>{
-      const f = ev.target.files?.[0]; if(!f) return;
-      const blob = await compressImage(f);
-      const url  = await uploadPhoto(sp.id, blob);
-      await updateSpace(sp.id, { photo_url:url });
+    compInput.addEventListener('change',async ev=>{
+      const f=ev.target.files?.[0]; if(!f) return;
+      const blob=await compressImage(f);
+      const url=await uploadPhoto(sp.id,blob);
+      await updateSpace(sp.id,{photo_url:url});
       await loadAll();
     });
   }
-  const compClear = box.querySelector('.comp-clear');
-  if(compClear){
-    compClear.onclick = async ()=>{ await updateSpace(sp.id, { photo_url:null }); await loadAll(); };
-  }
+  const compClear=box.querySelector('.comp-clear');
+  if(compClear){ compClear.onclick=async()=>{await updateSpace(sp.id,{photo_url:null}); await loadAll();}; }
 
   // add item (photo required)
   let itemBlob=null;
   const iph=box.querySelector('.i-ph');
-  box.querySelector('.i-photo').addEventListener('change', async ev=>{
+  box.querySelector('.i-photo').addEventListener('change',async ev=>{
     const f=ev.target.files?.[0]; if(!f) return;
-    itemBlob = await compressImage(f);
-    iph.innerHTML = '<img src="'+ URL.createObjectURL(itemBlob) +'">';
+    itemBlob=await compressImage(f);
+    iph.innerHTML='<img src="'+URL.createObjectURL(itemBlob)+'">';
   });
-  box.querySelector('.i-clear').onclick = ()=>{ itemBlob=null; iph.innerHTML='<span class="muted">Please take a photo (required)</span>'; };
+  box.querySelector('.i-clear').onclick=()=>{itemBlob=null; iph.innerHTML='<span class="muted">Please take a photo (required)</span>';};
 
-  box.querySelector('.i-add').onclick = async ()=>{
-    const name = box.querySelector('.i-name').value.trim();
-    const size = Number(box.querySelector('.i-size').value||0);
-    const role = box.querySelector('.i-role').value;
-    const note = box.querySelector('.i-note').value.trim();
-    if(!name) return alert('Please enter item name');
+  box.querySelector('.i-add').onclick=async ()=>{
+    const name=box.querySelector('.i-name').value.trim();
+    const size=Number(box.querySelector('.i-size').value||0);
+    const role=box.querySelector('.i-role').value;
+    const note=box.querySelector('.i-note').value.trim();
+    if(!name) return alert('Item name required');
     if(size<0) return alert('Size must be ≥ 0');
     if(!itemBlob) return alert('Photo is required');
-    await addEntry(sp.id, { name, size, note, role, photoBlob:itemBlob });
-    // clear form
+    await addEntry(sp.id,{name,size,note,role,photoBlob:itemBlob});
     box.querySelector('.i-name').value=''; box.querySelector('.i-size').value=''; box.querySelector('.i-note').value=''; itemBlob=null; iph.innerHTML='<span class="muted">Please take a photo (required)</span>';
     await loadAll();
   };
 
-  // items list
   renderInvList(sp.id, box.querySelector('.i-list'));
 
-  // save / delete buttons
-  box.querySelector('.btn-save').onclick = async ()=>{ await loadAll(); };
-  box.querySelector('.btn-del-table').onclick = async ()=>{
-    if(!confirm(`Delete ${sp.name||'this table'}?`)) return;
-    await deleteSpace(sp.id); await loadAll();
-  };
+  box.querySelector('.btn-save').onclick=async()=>{await loadAll();};
+  box.querySelector('.btn-del-table').onclick=async()=>{ if(!confirm(`Delete ${sp.name||'this table'}?`)) return; await deleteSpace(sp.id); await loadAll(); };
 }
 
-async function renderInvList(spaceId, container){
-  const arr = await fetchEntries(spaceId);
-  cacheEntries.set(spaceId, arr);
+async function renderInvList(spaceId,container){
+  const arr=await fetchEntries(spaceId);
+  cacheEntries.set(spaceId,arr);
   container.innerHTML='';
-  if(arr.length===0){ container.textContent='None'; container.classList.add('muted'); return; }
+  if(!arr.length){ container.textContent='None'; container.classList.add('muted'); return; }
   container.classList.remove('muted');
   arr.forEach(en=>{
     const row=document.createElement('div'); row.className='inv-card';
@@ -397,73 +364,65 @@ async function renderInvList(spaceId, container){
       '</div>'+
       '<div class="sp"></div>'+
       '<button class="btn btn-del" style="background:#25161a;border-color:#4a2a32;color:#ff9aa9">Delete</button>';
-    row.querySelector('.btn-del').onclick = async ()=>{
-      await deleteEntry(en.id);
-      await renderInvList(spaceId, container);
-      await renderLabelsWall();
-      await loadAll();
-    };
+    row.querySelector('.btn-del').onclick=async()=>{await deleteEntry(en.id); await renderInvList(spaceId,container); await renderLabelsWall(); await loadAll();};
     container.appendChild(row);
   });
 }
 
-/* ====== Toolbar (kept same behavior) ====== */
+/* ===== Toolbar ===== */
 function bindToolbar(){
-  $('#addTable').onclick = async ()=>{
-    const name = `Custom ${(currentSpaces.length||0)+1}`;
-    await createSpace({ name, capacity:100, notes:'' });
+  $('#addTable').onclick=async ()=>{
+    const name=`Custom ${(currentSpaces.length||0)+1}`;
+    await createSpace({name,capacity:100,notes:''});
     await loadAll();
   };
-  $('#addPair').onclick = async ()=>{
-    const spaces = await fetchSpaces();
-    // compute next valid number (exclude 4/7)
-    const used = new Map();
+  $('#addPair').onclick=async ()=>{
+    const spaces=await fetchSpaces();
+    // compute next number not used (exclude digits 4/7)
+    const used=new Map();
     spaces.forEach(t=>{
       const m=String(t.name||'').match(/^(\d{1,2})\s+(left|right)$/i);
       if(!m) return; const num=+m[1], side=m[2].toLowerCase();
-      if(!(num>=1 && num<=88 && !/[47]/.test(String(num).padStart(2,'0')))) return;
+      if(!isValid(num)) return;
       if(!used.has(num)) used.set(num,new Set()); used.get(num).add(side);
     });
     let pick=null;
-    for(let n=1;n<=88;n++){
-      if(!(n>=1 && n<=88 && !/[47]/.test(String(n).padStart(2,'0')))) continue;
-      const s=used.get(n); if(!s || s.size<2){ pick=n; break; }
-    }
+    for(let n=1;n<=88;n++){ if(!isValid(n)) continue; const s=used.get(n); if(!s||s.size<2){ pick=n; break; } }
     if(pick==null){ alert('No valid numbers left (4/7 excluded)'); return; }
-    await createSpace({ name:`${pick} Left`,  capacity:100 });
-    await createSpace({ name:`${pick} Right`, capacity:100 });
+    await createSpace({name:`${pick} Left`,capacity:100});
+    await createSpace({name:`${pick} Right`,capacity:100});
     await loadAll();
   };
-  $('#find').onclick = runSearch;
-  $('#q').onkeydown = e=>{ if(e.key==='Enter') runSearch(); };
-  $('#need').onkeydown = e=>{ if(e.key==='Enter') runSearch(); };
-  $('#clear').onclick = async ()=>{ $('#q').value=''; $('#need').value=''; await loadAll(); };
-  $('#reset').onclick = async ()=>{ await resetSite(); await loadAll(); };
+  $('#find').onclick=runSearch;
+  $('#q').onkeydown=e=>{if(e.key==='Enter') runSearch();};
+  $('#need').onkeydown=e=>{if(e.key==='Enter') runSearch();};
+  $('#clear').onclick=async()=>{$('#q').value=''; $('#need').value=''; await loadAll();};
+  $('#reset').onclick=async()=>{await resetSite(); await loadAll();};
 }
 function runSearch(){
-  const kw = $('#q').value.trim().toLowerCase();
-  const req = Number($('#need').value)||0;
-  const out = currentSpaces.filter(sp=>{
-    const ents = cacheEntries.get(sp.id)||[];
-    const textHit = !kw ||
+  const kw=$('#q').value.trim().toLowerCase();
+  const req=Number($('#need').value)||0;
+  const out=currentSpaces.filter(sp=>{
+    const ents=cacheEntries.get(sp.id)||[];
+    const textHit=!kw ||
       String(sp.name||'').toLowerCase().includes(kw) ||
       String(sp.notes||'').toLowerCase().includes(kw) ||
       ents.some(en=> String(en.name||'').toLowerCase().includes(kw) || String(en.note||'').toLowerCase().includes(kw));
-    const spaceHit = isNaN(req) || req<=0 || remainingOf(sp, ents)>=req;
+    const spaceHit=isNaN(req)||req<=0||remainingOf(sp,ents)>=req;
     return textHit && spaceHit;
   });
   renderList(out);
 }
 
-/* ====== Realtime (multi-device auto-sync) ====== */
+/* ===== Realtime ===== */
 function setupRealtime(){
   sb.channel('realtime:inventory')
-    .on('postgres_changes', { event:'*', schema:'public', table:'spaces'  }, () => loadAll())
-    .on('postgres_changes', { event:'*', schema:'public', table:'entries' }, () => loadAll())
+    .on('postgres_changes',{event:'*',schema:'public',table:'spaces'},()=>loadAll())
+    .on('postgres_changes',{event:'*',schema:'public',table:'entries'},()=>loadAll())
     .subscribe();
 }
 
-/* ====== start ====== */
+/* ===== Start ===== */
 bindToolbar();
 setupRealtime();
 loadAll();
