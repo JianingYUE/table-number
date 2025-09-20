@@ -207,20 +207,48 @@ async function resetSite(){
 
 /* ===== Compute & labels ===== */
 function remainingOf(cap,used){ return Math.max(0, Number(cap||0)-Number(used||0)); }
+// Build labels wall (client-side aggregation; supabase-js v2 has no .group())
 async function renderLabelsWall(){
-  labelsBox.innerHTML='';
-  const {data,error}=await sb.from('entries')
-    .select('name, count:id')
-    .eq('site_slug',SITE_SLUG)
-    .group('name').order('count',{ascending:false});
-  if(error||!data||!data.length){ labelsBox.innerHTML='<span class="muted">No labels yet</span>'; return; }
-  data.forEach(row=>{
-    const chip=document.createElement('span'); chip.className='chip';
-    chip.innerHTML=`<b>${escapeHtml(row.name)}</b> <span class="muted">×${row.count}</span>`;
-    chip.onclick=()=>{ $('#q').value=row.name; runSearch(); };
-    labelsBox.appendChild(chip);
-  });
+  labelsBox.innerHTML = '';
+  try {
+    // 取出所有条目的 name（当前站点）
+    const { data, error } = await sb
+      .from('entries')
+      .select('name')
+      .eq('site_slug', SITE_SLUG);
+
+    if (error) throw error;
+
+    // 统计每个 name 的出现次数
+    const counts = new Map();
+    (data || []).forEach(row => {
+      const k = (row.name || '').trim();
+      if (!k) return;
+      counts.set(k, (counts.get(k) || 0) + 1);
+    });
+
+    // 排序：出现次数从多到少
+    const arr = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+
+    if (!arr.length) {
+      labelsBox.innerHTML = '<span class="muted">No labels yet</span>';
+      return;
+    }
+
+    // 渲染 chips
+    arr.forEach(([name, cnt]) => {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.innerHTML = `<b>${escapeHtml(name)}</b> <span class="muted">×${cnt}</span>`;
+      chip.onclick = () => { $('#q').value = name; runSearch(); };
+      labelsBox.appendChild(chip);
+    });
+  } catch (e) {
+    showErr(e);
+    labelsBox.innerHTML = '<span class="muted">Failed to load labels</span>';
+  }
 }
+
 
 /* ===== Render (lazy entries) ===== */
 let currentSpaces=[];          // spaces from supabase
