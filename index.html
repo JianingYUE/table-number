@@ -136,18 +136,24 @@ async function fetchSpaces(){
     .eq('site_slug',SITE_SLUG).order('name');
   if(error) throw error; return data||[];
 }
+// 统计每个 space 的已用体积（前端聚合，兼容 supabase-js v2）
 async function fetchUsedMap(){
-  // space_id -> used sum(size)
-  const {data,error}=await sb.from('entries')
-    .select('space_id, used:size')
-    .eq('site_slug',SITE_SLUG)
-    .select('space_id, sum(size) as used')
-    .group('space_id');
-  if(error) throw error;
-  const map=new Map();
-  (data||[]).forEach(r=>map.set(r.space_id, Number(r.used||0)));
+  const { data, error } = await sb
+    .from('entries')
+    .select('space_id, size')
+    .eq('site_slug', SITE_SLUG);
+
+  if (error) throw error;
+
+  const map = new Map();
+  (data || []).forEach(row => {
+    const sid = row.space_id;
+    const sz  = Number(row.size || 0);
+    map.set(sid, (map.get(sid) || 0) + sz);
+  });
   return map;
 }
+
 async function fetchEntries(spaceId){
   const {data,error}=await sb.from('entries')
     .select('id,space_id,name,size,note,role,added_at')
