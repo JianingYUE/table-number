@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Inventory – Bar View</title>
+<title>Inventory – Bar View (Supabase)</title>
 <style>
 :root{
   --bg:#0b0d10; --card:#12161b; --muted:#8892a6; --text:#e6edf3; --accent:#6aa6ff;
@@ -78,6 +78,7 @@ textarea{min-height:84px;resize:vertical}
 </header>
 
 <main class="wrap">
+  <div id="errbar" class="muted" style="display:none;margin:6px 2px 10px;padding:8px 10px;border:1px solid #3b2a2a;background:#1a1212;border-radius:8px;"></div>
   <div class="muted" style="margin:4px 2px 6px">Green = remaining space</div>
   <section id="labelsWall">
     <div class="title">Auto labels (from item names). Tap to filter:</div>
@@ -88,7 +89,7 @@ textarea{min-height:84px;resize:vertical}
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-/* ===== Supabase config (your project) ===== */
+/* ===== Supabase config ===== */
 const SUPABASE_URL  = "https://ehfhcgzsirgebrfofaph.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVoZmhjZ3pzaXJnZWJyZm9mYXBoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1OTg5MjMsImV4cCI6MjA3MDE3NDkyM30.OOnzt-mCdQNYU3b17O3vtDTrPA2AmJPij8OhfnvMAN0";
 const SITE_SLUG     = "inventory-1";
@@ -96,13 +97,19 @@ const BUCKET        = "compartment-photos";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
 /* ===== Helpers ===== */
-const $ = s => document.querySelector(s);
+const $  = s => document.querySelector(s);
 const list = $('#tableList');
 const labelsBox = $('#labelsBox');
 
-function escapeHtml(s){return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function showErr(e){
+  console.error(e);
+  const box = document.getElementById('errbar');
+  if(!box) return;
+  box.style.display = 'block';
+  box.textContent = (e && e.message) ? e.message : String(e);
+}
+function escapeHtml(s){return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&gt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function escapeAttr(s){return escapeHtml(s).replace(/"/g,'&quot;');}
-function parseNumSide(name){const m=String(name||'').match(/^(\d{1,2})\s+(left|right)$/i);return m?{num:+m[1],side:m[2].toLowerCase()}:null;}
 function isValid(n){return n>=1&&n<=88&&!/[47]/.test(String(n).padStart(2,'0'));}
 
 function compressImage(file,{maxW=1280,maxH=1280,quality=0.82}={}){
@@ -128,6 +135,18 @@ async function fetchSpaces(){
     .select('id,name,capacity,notes,photo_url,updated_at')
     .eq('site_slug',SITE_SLUG).order('name');
   if(error) throw error; return data||[];
+}
+async function fetchUsedMap(){
+  // space_id -> used sum(size)
+  const {data,error}=await sb.from('entries')
+    .select('space_id, used:size')
+    .eq('site_slug',SITE_SLUG)
+    .select('space_id, sum(size) as used')
+    .group('space_id');
+  if(error) throw error;
+  const map=new Map();
+  (data||[]).forEach(r=>map.set(r.space_id, Number(r.used||0)));
+  return map;
 }
 async function fetchEntries(spaceId){
   const {data,error}=await sb.from('entries')
@@ -181,14 +200,12 @@ async function resetSite(){
 }
 
 /* ===== Compute & labels ===== */
-function remainingOf(space,entries){
-  const used=(entries||[]).reduce((s,e)=>s+Number(e.size||0),0);
-  return Math.max(0,Number(space.capacity||0)-used);
-}
+function remainingOf(cap,used){ return Math.max(0, Number(cap||0)-Number(used||0)); }
 async function renderLabelsWall(){
   labelsBox.innerHTML='';
   const {data,error}=await sb.from('entries')
-    .select('name, count:id').eq('site_slug',SITE_SLUG)
+    .select('name, count:id')
+    .eq('site_slug',SITE_SLUG)
     .group('name').order('count',{ascending:false});
   if(error||!data||!data.length){ labelsBox.innerHTML='<span class="muted">No labels yet</span>'; return; }
   data.forEach(row=>{
@@ -199,22 +216,28 @@ async function renderLabelsWall(){
   });
 }
 
-/* ===== Render ===== */
+/* ===== Render (lazy entries) ===== */
 let currentSpaces=[];          // spaces from supabase
-let cacheEntries=new Map();    // spaceId -> entries
+let usedMap=new Map();         // spaceId -> used
+let cacheEntries=new Map();    // spaceId -> entries[]
 
 async function loadAll(){
-  currentSpaces=await fetchSpaces();
-  cacheEntries.clear();
-  for(const sp of currentSpaces){ cacheEntries.set(sp.id, await fetchEntries(sp.id)); }
-  await renderLabelsWall();
-  renderList();
+  try{
+    const [spaces, used] = await Promise.all([fetchSpaces(), fetchUsedMap()]);
+    currentSpaces = spaces;
+    usedMap = used;
+    cacheEntries.clear();          // entries 按需加载
+    await renderLabelsWall();
+    renderList();
+  }catch(e){ showErr(e); }
 }
 
 function renderList(items){
   const spaces=(items||currentSpaces).map(sp=>{
-    const ents=cacheEntries.get(sp.id)||[];
-    return {sp,ents,rem:remainingOf(sp,ents),cap:Number(sp.capacity||0)};
+    const used = usedMap.get(sp.id) || 0;
+    const cap  = Number(sp.capacity||0);
+    const rem  = remainingOf(cap, used);
+    return {sp, used, cap, rem};
   }).sort((a,b)=>b.rem-a.rem);
 
   list.innerHTML='';
@@ -223,14 +246,14 @@ function renderList(items){
     return;
   }
 
-  spaces.forEach(({sp,ents,rem,cap})=>{
+  spaces.forEach(({sp,used,cap,rem})=>{
     const pct=cap>0?(rem/cap)*100:0;
     const row=document.createElement('div'); row.className='table-row';
     row.innerHTML=
       '<div class="row-head">'+
         '<div class="meta">'+
           `<span class="badge">${escapeHtml(sp.name||'')}</span>`+
-          `<span class="ellip">${escapeHtml((ents[0]?.name)||sp.notes||'…')}</span>`+
+          `<span class="ellip">${escapeHtml(sp.notes||'')}</span>`+
         '</div>'+
         `<div class="bar"><div class="rem" style="width:${pct}%"></div></div>`+
         `<div class="stat">${rem}/${cap}</div>`+
@@ -246,8 +269,15 @@ function renderList(items){
 }
 
 async function renderRowEditor(sp,box){
-  const ents=cacheEntries.get(sp.id)||[];
-  const rem=remainingOf(sp,ents), cap=Number(sp.capacity||0);
+  // lazy-load items for this space
+  let ents = cacheEntries.get(sp.id);
+  if(!ents){
+    try{ ents = await fetchEntries(sp.id); cacheEntries.set(sp.id, ents); }
+    catch(e){ showErr(e); ents = []; }
+  }
+  const used = usedMap.get(sp.id) || 0;
+  const cap  = Number(sp.capacity||0);
+  const rem  = remainingOf(cap, used);
 
   box.innerHTML=
     '<div class="field-2">'+
@@ -272,7 +302,7 @@ async function renderRowEditor(sp,box){
     '<div class="field-2">'+
       '<label>Item name<input class="i-name" type="text" placeholder="Camera / Cake / Thermos"></label>'+
       '<label>Size<input class="i-size" type="number" min="0" step="1" placeholder="10"></label>'+
-    </div>'+
+    '</div>'+
     '<div class="field">'+
       '<label>From '+
         '<select class="i-role" style="width:100%">'+
@@ -293,39 +323,43 @@ async function renderRowEditor(sp,box){
     '</div>'+
 
     '<div class="field" style="margin-top:10px"><strong>Items</strong></div>'+
-    '<div class="inv i-list muted">None</div>'+
+    `<div class="inv i-list ${ents.length? '' : 'muted'}">${ents.length? '' : 'Loading…'}</div>`+
 
     '<div class="actions" style="margin-top:10px">'+
       '<button class="btn primary btn-save">Save Table</button>'+
       '<button class="btn btn-del-table" style="background:#25161a;border-color:#4a2a32;color:#ff9aa9">Delete Table</button>'+
     '</div>';
 
-  // update table fields
-  box.querySelector('.in-name').onchange = async e=>{await updateSpace(sp.id,{name:e.target.value.trim()}); await loadAll();};
-  box.querySelector('.in-cap').onchange  = async e=>{await updateSpace(sp.id,{capacity:Number(e.target.value)||0}); await loadAll();};
-  box.querySelector('.in-notes').onchange= async e=>{await updateSpace(sp.id,{notes:e.target.value}); await loadAll();};
+  // table updates
+  box.querySelector('.in-name').onchange = async e=>{try{await updateSpace(sp.id,{name:e.target.value.trim()}); await loadAll();}catch(err){showErr(err)}};
+  box.querySelector('.in-cap').onchange  = async e=>{try{await updateSpace(sp.id,{capacity:Number(e.target.value)||0}); await loadAll();}catch(err){showErr(err)}};
+  box.querySelector('.in-notes').onchange= async e=>{try{await updateSpace(sp.id,{notes:e.target.value}); await loadAll();}catch(err){showErr(err)}};
 
   // compartment photo
   const compInput=box.querySelector('.comp-photo');
   if(compInput){
     compInput.addEventListener('change',async ev=>{
-      const f=ev.target.files?.[0]; if(!f) return;
-      const blob=await compressImage(f);
-      const url=await uploadPhoto(sp.id,blob);
-      await updateSpace(sp.id,{photo_url:url});
-      await loadAll();
+      try{
+        const f=ev.target.files?.[0]; if(!f) return;
+        const blob=await compressImage(f);
+        const url=await uploadPhoto(sp.id,blob);
+        await updateSpace(sp.id,{photo_url:url});
+        await loadAll();
+      }catch(err){showErr(err)}
     });
   }
   const compClear=box.querySelector('.comp-clear');
-  if(compClear){ compClear.onclick=async()=>{await updateSpace(sp.id,{photo_url:null}); await loadAll();}; }
+  if(compClear){ compClear.onclick=async()=>{try{await updateSpace(sp.id,{photo_url:null}); await loadAll();}catch(err){showErr(err)}}; }
 
   // add item (photo required)
   let itemBlob=null;
   const iph=box.querySelector('.i-ph');
   box.querySelector('.i-photo').addEventListener('change',async ev=>{
     const f=ev.target.files?.[0]; if(!f) return;
-    itemBlob=await compressImage(f);
-    iph.innerHTML='<img src="'+URL.createObjectURL(itemBlob)+'">';
+    try{
+      itemBlob=await compressImage(f);
+      iph.innerHTML='<img src="'+URL.createObjectURL(itemBlob)+'">';
+    }catch(err){showErr(err)}
   });
   box.querySelector('.i-clear').onclick=()=>{itemBlob=null; iph.innerHTML='<span class="muted">Please take a photo (required)</span>';};
 
@@ -337,61 +371,89 @@ async function renderRowEditor(sp,box){
     if(!name) return alert('Item name required');
     if(size<0) return alert('Size must be ≥ 0');
     if(!itemBlob) return alert('Photo is required');
-    await addEntry(sp.id,{name,size,note,role,photoBlob:itemBlob});
-    box.querySelector('.i-name').value=''; box.querySelector('.i-size').value=''; box.querySelector('.i-note').value=''; itemBlob=null; iph.innerHTML='<span class="muted">Please take a photo (required)</span>';
-    await loadAll();
+    try{
+      await addEntry(sp.id,{name,size,note,role,photoBlob:itemBlob});
+      box.querySelector('.i-name').value=''; box.querySelector('.i-size').value=''; box.querySelector('.i-note').value=''; itemBlob=null; iph.innerHTML='<span class="muted">Please take a photo (required)</span>';
+      // refresh this row + labels + top bars
+      cacheEntries.delete(sp.id);
+      await loadAll();
+      document.querySelectorAll('.table-row').forEach(r=>{
+        if(r.classList.contains('open') && r.querySelector('.badge')?.textContent===sp.name){
+          renderRowEditor(sp, r.querySelector('.expander'));
+        }
+      });
+    }catch(err){showErr(err)}
   };
 
-  renderInvList(sp.id, box.querySelector('.i-list'));
+  await renderInvList(sp.id, box.querySelector('.i-list'));
 
   box.querySelector('.btn-save').onclick=async()=>{await loadAll();};
-  box.querySelector('.btn-del-table').onclick=async()=>{ if(!confirm(`Delete ${sp.name||'this table'}?`)) return; await deleteSpace(sp.id); await loadAll(); };
+  box.querySelector('.btn-del-table').onclick=async()=>{
+    if(!confirm(`Delete ${sp.name||'this table'}?`)) return;
+    try{ await deleteSpace(sp.id); await loadAll(); }catch(err){showErr(err)}
+  };
 }
 
 async function renderInvList(spaceId,container){
-  const arr=await fetchEntries(spaceId);
-  cacheEntries.set(spaceId,arr);
-  container.innerHTML='';
-  if(!arr.length){ container.textContent='None'; container.classList.add('muted'); return; }
-  container.classList.remove('muted');
-  arr.forEach(en=>{
-    const row=document.createElement('div'); row.className='inv-card';
-    row.innerHTML =
-      '<div>'+
-        `<div><b>${escapeHtml(en.name)}</b> <span class="tag">Size ${Number(en.size||0)}</span> <span class="tag">${escapeHtml(en.role||'other')}</span></div>`+
-        `<div class="muted" style="max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(en.note||'')}</div>`+
-        `<div class="muted" style="font-size:12px">${new Date(en.added_at).toLocaleString()}</div>`+
-      '</div>'+
-      '<div class="sp"></div>'+
-      '<button class="btn btn-del" style="background:#25161a;border-color:#4a2a32;color:#ff9aa9">Delete</button>';
-    row.querySelector('.btn-del').onclick=async()=>{await deleteEntry(en.id); await renderInvList(spaceId,container); await renderLabelsWall(); await loadAll();};
-    container.appendChild(row);
-  });
+  try{
+    const arr=await fetchEntries(spaceId);
+    cacheEntries.set(spaceId,arr);
+    container.innerHTML='';
+    if(!arr.length){ container.textContent='None'; container.classList.add('muted'); return; }
+    container.classList.remove('muted');
+    arr.forEach(en=>{
+      const row=document.createElement('div'); row.className='inv-card';
+      row.innerHTML =
+        '<div>'+
+          `<div><b>${escapeHtml(en.name)}</b> <span class="tag">Size ${Number(en.size||0)}</span> <span class="tag">${escapeHtml(en.role||'other')}</span></div>`+
+          `<div class="muted" style="max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(en.note||'')}</div>`+
+          `<div class="muted" style="font-size:12px">${new Date(en.added_at).toLocaleString()}</div>`+
+        '</div>'+
+        '<div class="sp"></div>'+
+        '<button class="btn btn-del" style="background:#25161a;border-color:#4a2a32;color:#ff9aa9">Delete</button>';
+      row.querySelector('.btn-del').onclick=async()=>{
+        try{
+          await deleteEntry(en.id);
+          await renderInvList(spaceId,container);
+          await renderLabelsWall();
+          await loadAll();
+        }catch(err){showErr(err)}
+      };
+      container.appendChild(row);
+    });
+  }catch(e){
+    showErr(e);
+    container.textContent='Failed to load items';
+    container.classList.add('muted');
+  }
 }
 
 /* ===== Toolbar ===== */
 function bindToolbar(){
   $('#addTable').onclick=async ()=>{
-    const name=`Custom ${(currentSpaces.length||0)+1}`;
-    await createSpace({name,capacity:100,notes:''});
-    await loadAll();
+    try{
+      const name=`Custom ${(currentSpaces.length||0)+1}`;
+      await createSpace({name,capacity:100,notes:''});
+      await loadAll();
+    }catch(e){showErr(e)}
   };
   $('#addPair').onclick=async ()=>{
-    const spaces=await fetchSpaces();
-    // compute next number not used (exclude digits 4/7)
-    const used=new Map();
-    spaces.forEach(t=>{
-      const m=String(t.name||'').match(/^(\d{1,2})\s+(left|right)$/i);
-      if(!m) return; const num=+m[1], side=m[2].toLowerCase();
-      if(!isValid(num)) return;
-      if(!used.has(num)) used.set(num,new Set()); used.get(num).add(side);
-    });
-    let pick=null;
-    for(let n=1;n<=88;n++){ if(!isValid(n)) continue; const s=used.get(n); if(!s||s.size<2){ pick=n; break; } }
-    if(pick==null){ alert('No valid numbers left (4/7 excluded)'); return; }
-    await createSpace({name:`${pick} Left`,capacity:100});
-    await createSpace({name:`${pick} Right`,capacity:100});
-    await loadAll();
+    try{
+      const spaces=await fetchSpaces();
+      const used=new Map();
+      spaces.forEach(t=>{
+        const m=String(t.name||'').match(/^(\d{1,2})\s+(left|right)$/i);
+        if(!m) return; const num=+m[1], side=m[2].toLowerCase();
+        if(!isValid(num)) return;
+        if(!used.has(num)) used.set(num,new Set()); used.get(num).add(side);
+      });
+      let pick=null;
+      for(let n=1;n<=88;n++){ if(!isValid(n)) continue; const s=used.get(n); if(!s||s.size<2){ pick=n; break; } }
+      if(pick==null){ alert('No valid numbers left (4/7 excluded)'); return; }
+      await createSpace({name:`${pick} Left`,capacity:100});
+      await createSpace({name:`${pick} Right`,capacity:100});
+      await loadAll();
+    }catch(e){showErr(e)}
   };
   $('#find').onclick=runSearch;
   $('#q').onkeydown=e=>{if(e.key==='Enter') runSearch();};
@@ -403,12 +465,11 @@ function runSearch(){
   const kw=$('#q').value.trim().toLowerCase();
   const req=Number($('#need').value)||0;
   const out=currentSpaces.filter(sp=>{
-    const ents=cacheEntries.get(sp.id)||[];
     const textHit=!kw ||
       String(sp.name||'').toLowerCase().includes(kw) ||
-      String(sp.notes||'').toLowerCase().includes(kw) ||
-      ents.some(en=> String(en.name||'').toLowerCase().includes(kw) || String(en.note||'').toLowerCase().includes(kw));
-    const spaceHit=isNaN(req)||req<=0||remainingOf(sp,ents)>=req;
+      String(sp.notes||'').toLowerCase().includes(kw);
+    const used = usedMap.get(sp.id) || 0;
+    const spaceHit=isNaN(req)||req<=0||remainingOf(sp.capacity, used)>=req;
     return textHit && spaceHit;
   });
   renderList(out);
