@@ -104,10 +104,14 @@ const labelsBox = $('#labelsBox');
 function showErr(e){
   console.error(e);
   const box = document.getElementById('errbar');
-  if(!box) return;
-  box.style.display = 'block';
-  box.textContent = (e && e.message) ? e.message : String(e);
+  if (box) {
+    box.style.display = 'block';
+    box.textContent = (e && e.message) ? e.message : String(e);
+  }
+  // 手机端一定弹出
+  try { alert((e && e.message) ? e.message : String(e)); } catch (_) {}
 }
+
 function escapeHtml(s){return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&gt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function escapeAttr(s){return escapeHtml(s).replace(/"/g,'&quot;');}
 function isValid(n){return n>=1&&n<=88&&!/[47]/.test(String(n).padStart(2,'0'));}
